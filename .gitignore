@@ -1,0 +1,7 @@
+/logs/
+/generator/
+/discriminator/
+/data/
+/datasets/
+/__pycache__/
+logs.txt
