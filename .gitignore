@@ -5,3 +5,5 @@
 /datasets/
 /__pycache__/
 logs.txt
+/temp/
+*.gif

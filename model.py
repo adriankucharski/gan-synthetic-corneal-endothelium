@@ -14,7 +14,7 @@ from skimage import color, io, morphology
 from tensorflow.keras.layers import (Activation, BatchNormalization,
                                      Concatenate, Conv2D, Dense, Dropout,
                                      Flatten, Input, LeakyReLU, MaxPool2D, Conv2DTranspose,
-                                     UpSampling2D, AveragePooling2D, Reshape)
+                                     UpSampling2D, AveragePooling2D, Reshape, GaussianNoise)
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.optimizers import Adam
@@ -40,17 +40,17 @@ def load_alizarine_dataset(path: str, mask_dilation: int = None) -> Tuple[np.nda
 
         image = (io.imread(image_path, as_gray=True)[
             np.newaxis, ..., np.newaxis] - 127.5) / 127.5
-        gt = io.imread(gt_path, as_gray=True)/ 255.0
+        gt = io.imread(gt_path, as_gray=True) / 255.0
         roi = io.imread(roi_path, as_gray=True)[
             np.newaxis, ..., np.newaxis] / 255.0
-        
+
         if mask_dilation is not None:
-            gt = morphology.dilation(gt, np.ones((mask_dilation, mask_dilation)))
-        gt = gt[np.newaxis, ..., np.newaxis] 
+            gt = morphology.dilation(gt, np.ones(
+                (mask_dilation, mask_dilation)))
+        gt = gt[np.newaxis, ..., np.newaxis]
         dataset.append(np.concatenate([image, gt, roi], axis=0))
 
     return dataset
-
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
     def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64,)):
@@ -84,13 +84,14 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
 class DataIterator(tf.keras.utils.Sequence):
     'Generates data for Keras'
 
-    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768):
+    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, sap_ratio: float = None):
         """Initialization
         Dataset is (x, y, roi)"""
         self.dataset = dataset
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.patch_per_image = patch_per_image
+        self.sap_ratio = sap_ratio  # salt and pepper ratio for masks
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -103,7 +104,7 @@ class DataIterator(tf.keras.utils.Sequence):
         idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
         x = self.x[idx]
         y = self.y[idx]
-        return y, x # mask, image
+        return y, x  # mask, image
 
     def _get_constrain_roi(self, roi: np.ndarray) -> Tuple[int, int, int, int]:
         'Get a posible patch position based on ROI'
@@ -129,23 +130,11 @@ class DataIterator(tf.keras.utils.Sequence):
                 self.y.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
 
         self.x, self.y = np.array(self.x), np.array(self.y)
+        if self.sap_ratio is not None:
+            sap = np.random.binomial(
+                self.x.max(), self.sap_ratio, self.x.shape)
+            self.x[sap > 0] = 1.0
 
-
-class ModelPrediction():
-    def __init__(self, model: Union[str, Model], shape=32, preprocess_image=None):
-        pass
-
-    def summary(self):
-        self.model.summary()
-
-    def _predict_image(self, images: Tuple[np.ndarray], orginal_shape=True) -> Tuple[np.ndarray]:
-        pass
-
-    def predict(self, images: Union[str, np.ndarray, Tuple[np.ndarray]], orginal_shape=True) -> Tuple[np.ndarray]:
-        pass
-
-    def apply_mask(self,  images: Tuple[np.ndarray], masks: Tuple[np.ndarray], fill_value=0):
-        pass
 
 
 class GAN():
@@ -170,13 +159,13 @@ class GAN():
 
         self.g_model = self._generator_model()
         self.g_model.compile(
-            optimizer=Adam(1e-4), 
+            optimizer=Adam(1e-4),
             loss='mae',
         )
 
         self.d_model = self._discriminator_model()
         self.d_model.compile(
-            optimizer=Adam(2e-4, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(1e-3, beta_1=0.5, clipnorm=1e-3),
             loss=BinaryCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
@@ -186,7 +175,6 @@ class GAN():
             optimizer=Adam(1e-3, beta_1=0.5, clipnorm=1e-3),
             loss=BinaryCrossentropy(from_logits=True),
         )
-        self.gan.summary()
         self._create_dirs()
         self.writer = tf.summary.create_file_writer(self.log_path)
 
@@ -202,7 +190,7 @@ class GAN():
         if d_path:
             path = os.path.join(self.d_path_save, d_path)
             self.d_model.save(path)
-    
+
     def write_log(self, names, metrics):
         with self.writer.as_default():
             for name, value in zip(names, metrics):
@@ -235,15 +223,18 @@ class GAN():
         x = Conv2D(64, (5, 5), padding='same', kernel_initializer=i)(inputs)
         x = LeakyReLU(0.2)(x)
 
-        x = Conv2D(128, (5, 5), strides=(2,2), padding='same', kernel_initializer=i)(x)
+        x = Conv2D(128, (5, 5), strides=(2, 2),
+                   padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
         x = Dropout(0.5)(x)
 
-        x = Conv2D(256, (5, 5), strides=(2,2), padding='same', kernel_initializer=i)(x)
+        x = Conv2D(256, (5, 5), strides=(2, 2),
+                   padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
         x = Dropout(0.5)(x)
 
-        x = Conv2D(512, (5, 5), strides=(2,2), padding='same', kernel_initializer=i)(x)
+        x = Conv2D(512, (5, 5), strides=(2, 2),
+                   padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.3)(BatchNormalization()(x))
 
         x = Flatten()(x)
@@ -256,9 +247,11 @@ class GAN():
         x = Concatenate()([h, z])
         # x = h
         i = RandomNormal(stddev=1e-1)
+
         def ConvBlock(filters, kernel=3, strides=1, activation='relu'):
             return Sequential([
-                Conv2D(filters, kernel, strides=strides, padding='same', kernel_initializer=i),
+                Conv2D(filters, kernel, strides=strides,
+                       padding='same', kernel_initializer=i),
                 BatchNormalization(),
                 Activation(activation)
             ])
@@ -267,20 +260,20 @@ class GAN():
         kernels = 3
         filters, n, m = [32, 64, 128], 128, 32
         for f in filters:
-            x = ConvBlock(f, kernel=kernels, strides=(1,1))(x)
-            x = Dropout(0.5)(x)
+            x = ConvBlock(f, kernel=kernels, strides=(1, 1))(x)
             encoder.append(x)
-            x = ConvBlock(f, kernel=3, strides=(2,2))(x)
+            x = Dropout(0.5)(x)
+            x = ConvBlock(f, kernel=kernels, strides=(2, 2))(x)
 
         x = ConvBlock(n, kernel=kernels)(x)
 
         for f in filters[::-1]:
-            x = Conv2DTranspose(f, kernels, (2, 2), padding='same', activation='relu')(x)
+            x = Conv2DTranspose(f, kernels, (2, 2),
+                                padding='same', activation='relu')(x)
             x = ConvBlock(f, kernel=kernels)(x)
             x = Concatenate()([encoder.pop(), x])
 
         x = ConvBlock(m, kernels)(x)
-        # x = Concatenate()([x, z])
         outputs = Conv2D(1, (3, 3), padding='same',
                          activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
@@ -290,7 +283,9 @@ class GAN():
         d_names = ['d_loss', 'd_acc']
         g_names = ['g_loss']
 
-        validation_data = np.concatenate([x for x, _ in DataIterator(dataset, batch_size=1, patch_per_image=1)], axis=0)[0:8]
+        val_data = [[x[0], y[0]] for x, y in DataIterator(
+            dataset, batch_size=1, patch_per_image=1)][0:8]
+        val_data = np.array(val_data)
 
         for epoch in tqdm(range(epochs)):
             # Init iterator
@@ -303,8 +298,8 @@ class GAN():
 
             # real is for real images values
             # fake is for predicted pix2pix values
-            real_labels = tf.ones((batch_size, 1), dtype=tf.float64)
-            fake_labels = tf.zeros((batch_size, 1), dtype=tf.float64)
+            real_labels = tf.ones((batch_size, 1), dtype=tf.float32)
+            fake_labels = tf.zeros((batch_size, 1), dtype=tf.float32)
             labels_join = tf.concat([real_labels, fake_labels], axis=0)
 
             # Training discriminator loop
@@ -314,12 +309,15 @@ class GAN():
 
                 # Train discriminator on predicted and real and fake data
                 if separate_train:
-                    metrics = self.d_model.train_on_batch([gts, images_real], real_labels)
-                    metrics = self.d_model.train_on_batch([h, image_fake], fake_labels)
+                    metrics = self.d_model.train_on_batch(
+                        [gts, images_real], real_labels)
+                    metrics = self.d_model.train_on_batch(
+                        [h, image_fake], fake_labels)
                 else:
                     gts_join = tf.concat([gts, h], axis=0)
                     images_join = tf.concat([images_real, image_fake], axis=0)
-                    metrics = self.d_model.train_on_batch([gts_join, images_join], labels_join)
+                    metrics = self.d_model.train_on_batch(
+                        [gts_join, images_join], labels_join)
 
                 # Store discriminator metrics
                 if step % log_per_steps == log_per_steps - 1:
@@ -337,14 +335,15 @@ class GAN():
                 if step % log_per_steps == log_per_steps - 1:
                     self.write_log(gan_names, [metrics_gan])
                     self.write_log(g_names, [metrics_g])
-                
+
             self.save_models('model_last.h5', 'model_last.h5')
             if (epoch + 1) % save_per_epochs == 0:
-                self.evaluate(epoch=epoch, data=validation_data)
+                self.evaluate(epoch=epoch, data=val_data)
                 self.save_models(f'model_{epoch}.h5')
 
     def train_generator(self, epochs: int, dataset: Tuple[np.ndarray], batch_size=128):
-        validation_data = np.concatenate([x for x, _ in DataIterator(dataset, batch_size=1, patch_per_image=1)], axis=0)[0:8]
+        validation_data = np.concatenate([x for x, _ in DataIterator(
+            dataset, batch_size=1, patch_per_image=1)], axis=0)[0:8]
         for epoch in tqdm(range(epochs)):
             data_it = DataIterator(
                 dataset, batch_size, self.patch_size, self.patch_per_image)
@@ -352,12 +351,13 @@ class GAN():
                 # Train generator directly
                 zt = tf.random.normal((len(gt), *self.noise_size))
                 self.g_model.train_on_batch([gt, zt], image_real)
-            
+
             self.evaluate(epoch=epoch, data=validation_data)
 
-    def evaluate(self, epoch: int = None, num_of_test = 8, data=None):
+    def evaluate(self, epoch: int = None, num_of_test=8, data=None):
         np.random.seed(7312)
-        data_hz = HexagonDataIterator(num_of_test, self.patch_size, num_of_test, self.noise_size)
+        data_hz = HexagonDataIterator(
+            num_of_test, self.patch_size, num_of_test, self.noise_size, sap_ratio=1e-2)
         np.random.seed(None)
         h, z = data_hz.h, data_hz.z
         y = (self.g_model.predict_on_batch([h, z]) + 1) / 2.0
@@ -369,20 +369,25 @@ class GAN():
 
         for i in range(num_of_test):
             impath = os.path.join(path, f'{i}.png')
-            io.imsave(impath, np.array(np.concatenate([h[i], y[i]], axis=1) * 255, 'uint8'))
-        
+            io.imsave(impath, np.array(np.concatenate(
+                [h[i], y[i]], axis=1) * 255, 'uint8'))
+
         if data is not None:
             z = np.random.normal(size=(len(data), *self.noise_size))
-            y = (self.g_model.predict_on_batch([data, z]) + 1) / 2.0
+            xdata = data[:, 0, ...]
+            pred = (self.g_model.predict_on_batch([xdata, z]) + 1) / 2.0
             for i in range(len(data)):
+                x, y = data[i]
                 impath = os.path.join(path, f'org_{i}.png')
-                io.imsave(impath, np.array(np.concatenate([data[i], y[i]], axis=1) * 255, 'uint8'))
+                io.imsave(impath, np.array(np.concatenate(
+                    [x, pred[i], (y + 1) / 2.0], axis=1) * 255, 'uint8'))
 
 
 if __name__ == '__main__':
     gan = GAN(patch_per_image=250)
-    datasetAlizarine = load_alizarine_dataset('datasets/Alizarine/', mask_dilation=None)
-    gan.train(50, datasetAlizarine, save_per_epochs=1)
+    datasetAlizarine = load_alizarine_dataset(
+        'datasets/fold_1/', mask_dilation=None)
+    gan.train(75, datasetAlizarine, save_per_epochs=1)
     # gan.train_generator(50, datasetAlizarine)
 
     # data_it = DataIterator(datasetAlizarine)
