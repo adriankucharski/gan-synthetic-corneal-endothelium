@@ -84,14 +84,13 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
 class DataIterator(tf.keras.utils.Sequence):
     'Generates data for Keras'
 
-    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, sap_ratio: float = None):
+    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768):
         """Initialization
         Dataset is (x, y, roi)"""
         self.dataset = dataset
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.patch_per_image = patch_per_image
-        self.sap_ratio = sap_ratio  # salt and pepper ratio for masks
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -130,12 +129,6 @@ class DataIterator(tf.keras.utils.Sequence):
                 self.y.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
 
         self.x, self.y = np.array(self.x), np.array(self.y)
-        if self.sap_ratio is not None:
-            sap = np.random.binomial(
-                self.x.max(), self.sap_ratio, self.x.shape)
-            self.x[sap > 0] = 1.0
-
-
 
 class GAN():
     def __init__(self,
@@ -261,8 +254,8 @@ class GAN():
         filters, n, m = [32, 64, 128], 128, 32
         for f in filters:
             x = ConvBlock(f, kernel=kernels, strides=(1, 1))(x)
-            encoder.append(x)
             x = Dropout(0.5)(x)
+            encoder.append(x)
             x = ConvBlock(f, kernel=kernels, strides=(2, 2))(x)
 
         x = ConvBlock(n, kernel=kernels)(x)
@@ -338,26 +331,13 @@ class GAN():
 
             self.save_models('model_last.h5', 'model_last.h5')
             if (epoch + 1) % save_per_epochs == 0:
-                self.evaluate(epoch=epoch, data=val_data)
+                self._evaluate(epoch=epoch, data=val_data)
                 self.save_models(f'model_{epoch}.h5')
 
-    def train_generator(self, epochs: int, dataset: Tuple[np.ndarray], batch_size=128):
-        validation_data = np.concatenate([x for x, _ in DataIterator(
-            dataset, batch_size=1, patch_per_image=1)], axis=0)[0:8]
-        for epoch in tqdm(range(epochs)):
-            data_it = DataIterator(
-                dataset, batch_size, self.patch_size, self.patch_per_image)
-            for gt, image_real in data_it:
-                # Train generator directly
-                zt = tf.random.normal((len(gt), *self.noise_size))
-                self.g_model.train_on_batch([gt, zt], image_real)
-
-            self.evaluate(epoch=epoch, data=validation_data)
-
-    def evaluate(self, epoch: int = None, num_of_test=8, data=None):
+    def _evaluate(self, epoch: int = None, num_of_test=8, data=None):
         np.random.seed(7312)
         data_hz = HexagonDataIterator(
-            num_of_test, self.patch_size, num_of_test, self.noise_size, sap_ratio=1e-2)
+            num_of_test, self.patch_size, num_of_test, self.noise_size)
         np.random.seed(None)
         h, z = data_hz.h, data_hz.z
         y = (self.g_model.predict_on_batch([h, z]) + 1) / 2.0
@@ -384,10 +364,10 @@ class GAN():
 
 
 if __name__ == '__main__':
-    gan = GAN(patch_per_image=250)
+    gan = GAN(patch_per_image=300)
     datasetAlizarine = load_alizarine_dataset(
         'datasets/fold_1/', mask_dilation=None)
-    gan.train(75, datasetAlizarine, save_per_epochs=1)
+    gan.train(50, datasetAlizarine, save_per_epochs=1)
     # gan.train_generator(50, datasetAlizarine)
 
     # data_it = DataIterator(datasetAlizarine)
