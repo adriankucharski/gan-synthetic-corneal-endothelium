@@ -3,87 +3,110 @@ Dataset
 
 @author: Adrian Kucharski
 """
-import pickle
 from glob import glob
 from pathlib import Path
 from typing import Tuple
 
-import cv2
 import numpy as np
-from skimage import color, io, filters
-from tqdm import tqdm
+from skimage import io, morphology
+import os
+import tensorflow as tf
+from hexgrid import generate_hexagons
 
-from util import (I_MAX, Q_MAX)
-
-
-def prepare_yiq_data(rgb_0_255_data: np.ndarray) -> np.ndarray:
-    data_yiq = color.rgb2yiq(rgb_0_255_data / 255.0)
-    Y = data_yiq[..., 0:1]
-    I = data_yiq[..., 1:2] / I_MAX
-    Q = data_yiq[..., 2:3] / Q_MAX
-    return np.concatenate([Y, I, Q], axis=-1)
-
-
-def prepare_yiq_dataset(paths: Tuple[str], path_save: str = None, shape=32, postprocess=None) -> Tuple[np.ndarray, np.ndarray]:
+def load_alizarine_dataset(path: str, mask_dilation: int = None) -> Tuple[np.ndarray]:
+    'Returns Alizerine dataset with format [np.ndarray as {image, gt, roi}]'
     dataset = []
-    for path in tqdm(paths):
-        for datapath in glob(path):
-            idata = None
-            try:
-                idata = io.imread(datapath)[..., :3]
-            except:
-                idata = cv2.imread(datapath)[..., :3]
-                idata = cv2.cvtColor(idata, cv2.COLOR_BGR2RGB)
+    for image_path in glob(os.path.join(path, 'images/*')):
+        gt_path = image_path.replace('images', 'gt')
+        roi_path = image_path.replace('images', 'roi')
 
-            if idata.shape[-1] != 3:
-                idata = color.gray2rgb(idata)
-            idata = filters.gaussian(idata, 2, multichannel=True)
-            idata = cv2.resize(idata, (shape, shape))
-            idata = prepare_yiq_data(idata * 255)[np.newaxis, ...]
-            dataset.append(idata)
+        image = (io.imread(image_path, as_gray=True)[
+            np.newaxis, ..., np.newaxis] - 127.5) / 127.5
+        gt = io.imread(gt_path, as_gray=True) / 255.0
+        roi = io.imread(roi_path, as_gray=True)[
+            np.newaxis, ..., np.newaxis] / 255.0
 
-    dataset = np.concatenate(np.array(dataset), axis=0)
-    if postprocess is not None:
-        dataset = postprocess(dataset)
-    if path_save is not None:
-        Path(path_save).parent.mkdir(parents=True, exist_ok=True)
-        with open(path_save, 'wb') as f:
-            pickle.dump((dataset[..., :1], dataset[..., 1:]), f)
-    return dataset[..., :1], dataset[..., 1:]
+        if mask_dilation is not None:
+            gt = morphology.dilation(gt, np.ones(
+                (mask_dilation, mask_dilation)))
+        gt = gt[np.newaxis, ..., np.newaxis]
+        dataset.append(np.concatenate([image, gt, roi], axis=0))
 
+    return dataset
 
-if __name__ == '__main__':
-    shape = 64
-    dataset_save = Path('./datasets/dataset.h5')
-    dataset_jerry_path = Path('./data/B/jerry/*.*')
-    dataset_tom_path = Path('./data/B/tom/*.*')
+class HexagonDataIterator(tf.keras.utils.Sequence):
+    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64,)):
+        """Initialization
+        Dataset is (x, y, roi)"""
+        self.batch_size = batch_size
+        self.patch_size = patch_size
+        self.total_patches = total_patches
+        self.noise_size = noise_size
+        self.on_epoch_end()
 
-    dataset_validation_save = Path('./datasets/dataset_validation.h5')
-    dataset_validation_jerry_path = Path(
-        './data/B/validation/jerry/*.*')
-    dataset_validation_tom_path = Path(
-        './data/B/validation/tom/*.*')
+    def __len__(self) -> int:
+        'Denotes the number of batches per epoch'
+        return len(self.h) // self.batch_size
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    paths_jerry = [path for path in glob(str(dataset_jerry_path))]
-    paths_tom = [path for path in glob(str(dataset_tom_path))]
-    paths = paths_jerry + paths_tom
+    def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
+        'Generate one batch of data'
+        # Generate indexes of the batch
+        idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
+        h = self.h[idx]
+        z = self.z[idx]
+        return h, z
 
-    y, iq = prepare_yiq_dataset(
-        paths=paths, path_save=str(dataset_save), shape=shape)
-    print(y.shape, iq.shape)
-    print(y.min(), y.max())
-    print(iq.min(), iq.max())
+    def on_epoch_end(self):
+        'Generate new hexagons after one epoch'
+        self.h = generate_hexagons(self.total_patches,
+                                   (17, 21), 0.65, random_shift=8)
+        self.z = np.random.normal(0, 1, (self.total_patches, *self.noise_size))
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    paths_jerry = [path for path in glob(str(dataset_validation_jerry_path))]
-    paths_tom = [path for path in glob(str(dataset_validation_tom_path))]
-    paths = paths_jerry + paths_tom
+class DataIterator(tf.keras.utils.Sequence):
+    'Generates data for Keras'
 
-    y, iq = prepare_yiq_dataset(
-        paths=paths, path_save=str(dataset_validation_save), shape=shape)
-    print(y.shape, iq.shape)
-    print(y.min(), y.max())
-    print(iq.min(), iq.max())
+    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768):
+        """Initialization
+        Dataset is (x, y, roi)"""
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.patch_size = patch_size
+        self.patch_per_image = patch_per_image
+        self.on_epoch_end()
+
+    def __len__(self) -> int:
+        'Denotes the number of batches per epoch'
+        return len(self.x) // self.batch_size
+
+    def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
+        'Generate one batch of data'
+        # Generate indexes of the batch
+        idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
+        x = self.x[idx]
+        y = self.y[idx]
+        return y, x  # mask, image
+
+    def _get_constrain_roi(self, roi: np.ndarray) -> Tuple[int, int, int, int]:
+        'Get a posible patch position based on ROI'
+        px, py, _ = np.where(roi != 0)
+        pxy = np.dstack((px, py))[0]
+        ymin, xmin = np.min(pxy, axis=0)
+        ymax, xmax = np.max(pxy, axis=0)
+        return [ymin, xmin, ymax, xmax]
+
+    def on_epoch_end(self):
+        'Generate new patches after one epoch'
+        self.x, self.y = [], []
+        mid = self.patch_size // 2
+        for x, y, roi in self.dataset:
+            ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
+            xrand = np.random.randint(
+                xmin + mid, xmax - mid, self.patch_per_image)
+            yrand = np.random.randint(
+                ymin + mid, ymax - mid, self.patch_per_image)
+
+            for xpos, ypos in zip(xrand, yrand):
+                self.x.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                self.y.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+
+        self.x, self.y = np.array(self.x), np.array(self.y)
