@@ -152,8 +152,8 @@ class GAN():
 
         self.g_model = self._generator_model()
         self.g_model.compile(
-            optimizer=Adam(1e-4),
-            loss='mae',
+            optimizer=Adam(2e-4),
+            loss='mse',
         )
 
         self.d_model = self._discriminator_model()
@@ -162,6 +162,9 @@ class GAN():
             loss=BinaryCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
+
+        # Disable discriminator training during gan training
+        self.d_model.trainable = False 
 
         self.gan = self._gan_model()
         self.gan.compile(
@@ -226,7 +229,7 @@ class GAN():
         x = LeakyReLU(0.2)(BatchNormalization()(x))
         x = Dropout(0.5)(x)
 
-        x = Conv2D(512, (5, 5), strides=(2, 2),
+        x = Conv2D(512, (3, 3), strides=(2, 2),
                    padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.3)(BatchNormalization()(x))
 
@@ -302,13 +305,7 @@ class GAN():
                 # Train discriminator on predicted and real and fake data
                 gts_join = tf.concat([gts, h], axis=0)
                 images_join = tf.concat([images_real, image_fake], axis=0)
-                metrics = self.d_model.train_on_batch(
-                        [gts_join, images_join], labels_join)
-
-                # Store discriminator metrics
-                if step % log_per_steps == log_per_steps - 1:
-                    tf.summary.experimental.set_step(epoch * steps + step)
-                    self.write_log(d_names, metrics)
+                metrics_d = self.d_model.train_on_batch([gts_join, images_join], labels_join)
 
                 # Train generator directly
                 zt = tf.random.normal((len(gts), *self.noise_size))
@@ -317,10 +314,12 @@ class GAN():
                 # Train generator via discriminator
                 metrics_gan = self.gan.train_on_batch([h, z], real_labels)
 
-                # Store generator metrics
+                # Store generator and discriminator metrics
                 if step % log_per_steps == log_per_steps - 1:
+                    tf.summary.experimental.set_step(epoch * steps + step)
                     self.write_log(gan_names, [metrics_gan])
                     self.write_log(g_names, [metrics_g])
+                    self.write_log(d_names, metrics_d)
 
             self.save_models('model_last.h5', 'model_last.h5')
             if (epoch + 1) % save_per_epochs == 0:
@@ -357,11 +356,11 @@ class GAN():
 
 
 if __name__ == '__main__':
-    gan = GAN(patch_per_image=500)
+    gan = GAN(patch_per_image=350)
     # gan.summary()
     datasetAlizarine = load_alizarine_dataset(
          'datasets/fold_1/', mask_dilation=None)
-    gan.train(75, datasetAlizarine, save_per_epochs=1)
+    gan.train(50, datasetAlizarine, save_per_epochs=1)
 
 
     # data_it = DataIterator(datasetAlizarine)
