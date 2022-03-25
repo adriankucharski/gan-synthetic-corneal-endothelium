@@ -152,8 +152,8 @@ class GAN():
 
         self.g_model = self._generator_model()
         self.g_model.compile(
-            optimizer=Adam(2e-4),
-            loss='mse',
+            optimizer=Adam(1e-4),
+            loss='mae',
         )
 
         self.d_model = self._discriminator_model()
@@ -229,7 +229,7 @@ class GAN():
         x = LeakyReLU(0.2)(BatchNormalization()(x))
         x = Dropout(0.5)(x)
 
-        x = Conv2D(512, (3, 3), strides=(2, 2),
+        x = Conv2D(512, (5, 5), strides=(2, 2),
                    padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.3)(BatchNormalization()(x))
 
