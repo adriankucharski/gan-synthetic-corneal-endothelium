@@ -226,8 +226,8 @@ class GAN():
                     [gts_join, images_join], labels_join)
 
                 # Train generator directly
-                zt = tf.random.normal((len(gts), *self.noise_size))
-                metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
+                # zt = tf.random.normal((len(gts), *self.noise_size))
+                # metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
 
                 # Train generator via discriminator
                 metrics_gan = self.gan.train_on_batch([h, z], real_labels)
@@ -236,7 +236,7 @@ class GAN():
                 if step % log_per_steps == log_per_steps - 1:
                     tf.summary.experimental.set_step(epoch * steps + step)
                     self._write_log(gan_names, [metrics_gan])
-                    self._write_log(g_names, [metrics_g])
+                    # self._write_log(g_names, [metrics_g])
                     self._write_log(d_names, metrics_d)
 
             self._save_models('model_last.h5', 'model_last.h5')
