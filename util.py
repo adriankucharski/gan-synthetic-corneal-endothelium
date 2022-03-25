@@ -34,3 +34,8 @@ def scale(x: np.ndarray, low=-1, high=1) -> np.ndarray:
     assert low < high
     return (x - np.min(x)) * (high - low) / (np.max(x) - np.min(x)) + low
 
+def add_salt_and_pepper(x: np.ndarray, sap_ratio: float = 0.1, salt_value: float = 0.5) -> np.ndarray:
+    x = np.array(x)
+    sap = np.random.binomial(x.max(), sap_ratio, x.shape)
+    x[np.logical_and(sap > 0, x == 0)] = salt_value
+    return x

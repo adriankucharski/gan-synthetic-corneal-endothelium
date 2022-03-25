@@ -62,7 +62,7 @@ class GAN():
 
         self.gan = self._gan_model()
         self.gan.compile(
-            optimizer=Adam(1e-3, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(1e-4, beta_1=0.5, clipnorm=1e-3),
             loss=BinaryCrossentropy(from_logits=True),
         )
         self._create_dirs()
@@ -173,7 +173,7 @@ class GAN():
         filters, n, m = [32, 64, 128], 128, 32
         for f in filters:
             x = ConvBlock(f, kernel=kernels, strides=(1, 1))(x)
-            x = Dropout(0.5)(x)
+            x = Dropout(0.25)(x)
             encoder.append(x)
             x = ConvBlock(f, kernel=kernels, strides=(2, 2))(x)
 
