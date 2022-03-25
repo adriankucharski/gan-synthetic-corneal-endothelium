@@ -6,7 +6,7 @@ import numpy as np
 
 if __name__ == '__main__':
     im_name = 'org_1.png'
-    path = 'data/images/20220322-2026/*'
+    path = r'data\images\20220325-0029\*'
 
     frames = []
     for dir_name in sorted(glob(path), key=lambda x: int(Path(x).name)):

@@ -165,7 +165,7 @@ class GAN():
 
         self.gan = self._gan_model()
         self.gan.compile(
-            optimizer=Adam(1e-3, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(1e-3, beta_1=0.5),
             loss=BinaryCrossentropy(from_logits=True),
         )
         self._create_dirs()
@@ -238,7 +238,6 @@ class GAN():
         H = h = Input(self.input_size, name='mask')
         Z = z = Input(self.noise_size, name='noise')
         x = Concatenate()([h, z])
-        # x = h
         i = RandomNormal(stddev=1e-1)
 
         def ConvBlock(filters, kernel=3, strides=1, activation='relu'):
@@ -271,7 +270,7 @@ class GAN():
                          activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
-    def train(self, epochs: int, dataset: Tuple[np.ndarray], batch_size=128, save_per_epochs=5, separate_train=False, log_per_steps=5):
+    def train(self, epochs: int, dataset: Tuple[np.ndarray], batch_size=128, save_per_epochs=5, log_per_steps=5):
         gan_names = ['gan_loss']
         d_names = ['d_loss', 'd_acc']
         g_names = ['g_loss']
@@ -301,15 +300,9 @@ class GAN():
                 image_fake = self.g_model.predict_on_batch([h, z])
 
                 # Train discriminator on predicted and real and fake data
-                if separate_train:
-                    metrics = self.d_model.train_on_batch(
-                        [gts, images_real], real_labels)
-                    metrics = self.d_model.train_on_batch(
-                        [h, image_fake], fake_labels)
-                else:
-                    gts_join = tf.concat([gts, h], axis=0)
-                    images_join = tf.concat([images_real, image_fake], axis=0)
-                    metrics = self.d_model.train_on_batch(
+                gts_join = tf.concat([gts, h], axis=0)
+                images_join = tf.concat([images_real, image_fake], axis=0)
+                metrics = self.d_model.train_on_batch(
                         [gts_join, images_join], labels_join)
 
                 # Store discriminator metrics
@@ -364,11 +357,12 @@ class GAN():
 
 
 if __name__ == '__main__':
-    gan = GAN(patch_per_image=300)
+    gan = GAN(patch_per_image=500)
+    # gan.summary()
     datasetAlizarine = load_alizarine_dataset(
-        'datasets/fold_1/', mask_dilation=None)
-    gan.train(50, datasetAlizarine, save_per_epochs=1)
-    # gan.train_generator(50, datasetAlizarine)
+         'datasets/fold_1/', mask_dilation=None)
+    gan.train(75, datasetAlizarine, save_per_epochs=1)
+
 
     # data_it = DataIterator(datasetAlizarine)
     # for x, y in data_it:

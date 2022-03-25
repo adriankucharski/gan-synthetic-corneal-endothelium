@@ -15,15 +15,17 @@ def add_salt_and_pepper(x: np.ndarray, sap_ratio: float = 0.1) -> np.ndarray:
 
 if __name__ == '__main__':
     model: Model = load_model(r'generator\models\20220322-2026\model_last.h5')
+    model.summary()
     # datasetAlizarine = load_alizarine_dataset('datasets/Alizarine/', mask_dilation=None)
     # data = DataIterator(datasetAlizarine, batch_size=1, patch_per_image=1)
 
     data = HexagonDataIterator(1, 64, 5, noise_size=(64,64,1))
+    
     for x, z in data:
         # plt.imshow(x[0], cmap='gray')
         # plt.show()
-        x = morphology.dilation(x[0, ..., 0], morphology.square(2))[np.newaxis, ..., np.newaxis]
-        xsap = add_salt_and_pepper(x, 0.15)
+        # x = morphology.dilation(x[0, ..., 0], morphology.square(2))[np.newaxis, ..., np.newaxis]
+        xsap = add_salt_and_pepper(x, 0.25)
         psap = ((model.predict_on_batch([xsap, z])[0] + 1) / 2.0)
         p = ((model.predict_on_batch([x, z])[0] + 1) / 2.0)
         print(p.shape)
