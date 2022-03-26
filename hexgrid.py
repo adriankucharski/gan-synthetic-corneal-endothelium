@@ -71,27 +71,3 @@ def generate_hexagons(num: int, hex_size: Tuple[int, int] = (16, 20), neatness: 
     hexagons = pool.starmap(grid_create_hexagons, args)
     return np.array(hexagons)
 
-
-def multiplen(times=1):
-    start = timer()
-    els = generate_hexagons(times)
-    end = timer()
-    print(timedelta(seconds=end-start))
-    return els
-
-
-if __name__ == "__main__":
-    if 0:
-        a = grid_create_hexagons(
-            16, 0.65, width=64, height=64, random_shift=8)
-        plt.imshow(a, cmap="gray")
-        plt.show()
-    elif 1:
-        a = multiplen(20)
-        for h in a:
-            plt.imshow(h, cmap='gray')
-            plt.show()
-    elif 1:
-        multiplen(30 * 768)
-        # size = 64x64, num = 30 * 768, threads = 6, time = 0:00:08.749562
-        # cProfile.run("multiple(1000)")
