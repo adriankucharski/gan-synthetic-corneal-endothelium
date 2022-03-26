@@ -14,4 +14,4 @@ if __name__ == '__main__':
     fold = 0
     gan = GAN(patch_per_image=500)
     train, test  = load_dataset(r'datasets\Alizarine\folds.json')[fold]
-    gan.train(50, train, save_per_epochs=1)
+    gan.train(100, train, save_per_epochs=1)

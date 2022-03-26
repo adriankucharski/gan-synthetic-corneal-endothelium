@@ -52,7 +52,7 @@ class GAN():
 
         self.d_model = self._discriminator_model()
         self.d_model.compile(
-            optimizer=Adam(2e-4, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(1e-4, beta_1=0.5, clipnorm=1e-3),
             loss=BinaryCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
