@@ -8,3 +8,4 @@ logs.txt
 /temp/
 *.gif
 temp.py
+create_animation.py

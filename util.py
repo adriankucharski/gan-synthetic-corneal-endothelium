@@ -20,11 +20,6 @@ def time_measure(routine: Callable) -> timedelta:
     end = timer()
     return timedelta(seconds=end-start)
 
-# - - - - - - - - - - - - - - - - - -
-#
-# - - - - - - - - - - - - - - - - - -
-
-
 def mapFromTo(x: np.ndarray, curr_min: float, curr_max: float, new_min: float, new_max: float) -> np.ndarray:
     y = (x-curr_min)/(curr_max-curr_min)*(new_max-new_min)+new_min
     return y

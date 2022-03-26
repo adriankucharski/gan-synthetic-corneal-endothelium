@@ -1,10 +1,7 @@
 import math
 from typing import Tuple
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-from timeit import default_timer as timer
-from datetime import timedelta
 import multiprocessing
 import itertools
 

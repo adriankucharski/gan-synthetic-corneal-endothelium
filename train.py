@@ -5,7 +5,6 @@ Training GAN
 """
 import os
 from model import GAN
-from pathlib import Path
 from dataset import load_dataset
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
