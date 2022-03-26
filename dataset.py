@@ -135,14 +135,13 @@ class HexagonDataGenerator():
     def __init__(self,
                  generator_model_path: str,
                  batch_size: int = 256,
-                 hex_size: Tuple[float, float] = (17, 21),
+                 hex_size: Tuple[float, float] = (17, 23),
                  neatness_range: Tuple[float, float] = (0.575, 0.7),
                  patch_size: int = 64,
                  random_shift_range: Tuple[int, int] = (1, 10),
                  sap_ratio_range: Tuple[float, float] = (0.0, 0.125),
-                 salt_value_range: Tuple[float, float] = (0.5, 0.9),
+                 salt_value_range: Tuple[float, float] = (0.5, 1.0),
                  keep_edges_tf_ratio: Tuple[float, float] = (0.5, 0.5),
-                 rotate_angle_ratio: Tuple[float, float] = (-0.25, 0.25)
                  ):
         self.model: Model = load_model(generator_model_path)
         self.batch_size = batch_size
@@ -153,7 +152,6 @@ class HexagonDataGenerator():
         self.sap_ratio_range_min, self.sap_ratio_range_max = sap_ratio_range
         self.salt_value_range_min, self.salt_value_range_max = salt_value_range
         self.keep_edges_tf_ratio_false, self.keep_edges_tf_ratio_true = keep_edges_tf_ratio
-        self.rotate_angle_min, self.rotate_angle_max = rotate_angle_ratio
 
     def _get_random_samples(self):
         hex_size = np.random.uniform(
@@ -168,16 +166,11 @@ class HexagonDataGenerator():
             self.salt_value_range_min, self.salt_value_range_max, size=self.batch_size)
         keep_edges = np.random.choice([False, True], p=[
                                       self.keep_edges_tf_ratio_false, self.keep_edges_tf_ratio_true], size=self.batch_size)
-        rotate_angle = np.random.uniform(self.rotate_angle_min, self.rotate_angle_max, size=self.batch_size)
+
         data = []
         for i in range(self.batch_size):
             hexagon = grid_create_hexagons(
-                hex_size[i], neatness[i], self.patch_size, self.patch_size, random_shift[i])
-            hexagon = transform.rotate(hexagon[..., 0], angle=rotate_angle[i], center=[self.patch_size//2, self.patch_size//2])
-            # hexagon = morphology.dilation(hexagon, morphology.square(3))
-            # hexagon = morphology.skeletonize(hexagon)[np.newaxis, ..., np.newaxis]
-            hexagon = hexagon[np.newaxis, ..., np.newaxis]
-            # [np.newaxis, ...]
+                hex_size[i], neatness[i], self.patch_size, self.patch_size, random_shift[i])[np.newaxis, ...]
             salted_hexagon = add_salt_and_pepper(hexagon, sap_ratio[i], salt_value[i], keep_edges[i])
             z = np.random.normal(size=hexagon.shape)
             data.append(np.concatenate([salted_hexagon, z, hexagon], axis=0))
@@ -201,7 +194,7 @@ class HexagonDataGenerator():
 if __name__ == "__main__":
     gen = HexagonDataGenerator(r'generator\models\20220325-1620\model_last.h5')
     
-    print(time_measure(lambda: [y for y in zip(range(1000), gen)]))
+    # print(time_measure(lambda: [y for y in zip(range(1000), gen)]))
     for i, g in zip(range(200), gen):
         gt, image = g
         plt.imshow(np.concatenate([gt, image], axis=1), cmap="gray")
