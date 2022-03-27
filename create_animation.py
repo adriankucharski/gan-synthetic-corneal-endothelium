@@ -1,8 +1,9 @@
-from glob import glob
-from PIL import Image, ImageDraw
 import os
+from glob import glob
 from pathlib import Path
+
 import numpy as np
+from PIL import Image, ImageDraw
 
 if __name__ == '__main__':
     im_name = 'org_1.png'

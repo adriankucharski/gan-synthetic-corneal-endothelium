@@ -3,13 +3,9 @@ Other functions
 
 @author: Adrian Kucharski
 """
-
-from glob import glob
-import os
-from typing import Tuple, Union, Callable
+from typing import Callable
 
 import numpy as np
-from skimage import io
 from timeit import default_timer as timer
 from datetime import timedelta
 import numpy as np
@@ -26,6 +22,9 @@ def mapFromTo(x: np.ndarray, curr_min: float, curr_max: float, new_min: float, n
 
 def normalization(x: np.ndarray) -> np.ndarray:
     return (x - x.min()) / (x.max() - x.min())
+
+def normalize(x: np.ndarray) -> np.ndarray:
+    return (x + 1) / 2
 
 def scale(x: np.ndarray, low=-1, high=1) -> np.ndarray:
     assert low < high

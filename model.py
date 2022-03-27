@@ -5,19 +5,21 @@ Colorize GAN architecture.
 import datetime
 import os
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
 from skimage import io
-from tensorflow.keras.layers import (Activation, BatchNormalization,
-                                     Concatenate, Conv2D, Dense, Dropout,
-                                     Flatten, Input, LeakyReLU, Conv2DTranspose,)
-from tensorflow.keras.losses import BinaryCrossentropy
-from tensorflow.keras.models import Model, Sequential, load_model
-from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.layers import (Activation, BatchNormalization, GaussianNoise,
+                                     Concatenate, Conv2D, Conv2DTranspose,
+                                     Dense, Dropout, Flatten, Input, LeakyReLU)
+from tensorflow.keras.layers.experimental.preprocessing import Rescaling
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.optimizers import Adam
 from tqdm import tqdm
-from typing import Tuple
+from util import normalize
 from dataset import DataIterator, HexagonDataIterator
 
 np.set_printoptions(suppress=True)
@@ -40,7 +42,6 @@ class GAN():
         self.patch_size = patch_size
         self.patch_per_image = patch_per_image
 
-        self.noise_size = (patch_size, patch_size, 1)
         self.input_size = (patch_size, patch_size, 1)
         self.input_disc_size = (patch_size, patch_size, 1)
 
@@ -52,7 +53,7 @@ class GAN():
 
         self.d_model = self._discriminator_model()
         self.d_model.compile(
-            optimizer=Adam(1e-4, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(2e-4, beta_1=0.5, clipnorm=1e-3),
             loss=BinaryCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
@@ -70,11 +71,9 @@ class GAN():
 
     def _evaluate(self, epoch: int = None, num_of_test=8, data=None):
         np.random.seed(7312)
-        data_hz = HexagonDataIterator(
-            num_of_test, self.patch_size, num_of_test, self.noise_size)
+        h = HexagonDataIterator(num_of_test, self.patch_size, num_of_test)
         np.random.seed(None)
-        h, z = data_hz.h, data_hz.z
-        y = (self.g_model.predict_on_batch([h, z]) + 1) / 2.0
+        y = normalize(self.g_model.predict_on_batch(h))
 
         path = self.evaluate_path_save
         if epoch is not None:
@@ -87,14 +86,13 @@ class GAN():
                 [h[i], y[i]], axis=1) * 255, 'uint8'))
 
         if data is not None:
-            z = np.random.normal(size=(len(data), *self.noise_size))
             xdata = data[:, 0, ...]
-            pred = (self.g_model.predict_on_batch([xdata, z]) + 1) / 2.0
+            pred = normalize(self.g_model.predict_on_batch(xdata))
             for i in range(len(data)):
                 x, y = data[i]
                 impath = os.path.join(path, f'org_{i}.png')
                 io.imsave(impath, np.array(np.concatenate(
-                    [x, pred[i], (y + 1) / 2.0], axis=1) * 255, 'uint8'))
+                    [x, pred[i], normalize(y)], axis=1) * 255, 'uint8'))
 
     def _save_models(self, g_path: str = None, d_path: str = None):
         if g_path:
@@ -123,14 +121,14 @@ class GAN():
 
     def _gan_model(self):
         H = h = Input(self.input_size, name='mask')
-        Z = z = Input(self.noise_size, name='noise')
-        generator_out = self.g_model([h, z])
+        generator_out = self.g_model(h)
         discriminator_out = self.d_model([h, generator_out])
-        return Model(inputs=[H, Z], outputs=discriminator_out, name='GAN')
+        return Model(inputs=H, outputs=discriminator_out, name='GAN')
 
     def _discriminator_model(self):
         h = Input(self.input_disc_size, name='mask')
         t = Input(self.input_disc_size, name='image')
+        h = Rescaling(scale=2.0, offset=-1.0)(h)
         i = RandomNormal(stddev=1e-1)
         inputs = Concatenate()([h, t])
         x = Conv2D(64, (5, 5), padding='same', kernel_initializer=i)(inputs)
@@ -156,8 +154,9 @@ class GAN():
 
     def _generator_model(self):
         H = h = Input(self.input_size, name='mask')
-        Z = z = Input(self.noise_size, name='noise')
-        x = Concatenate()([h, z])
+        h = Rescaling(scale=2.0, offset=-1.0)(h)
+        x = GaussianNoise(1)(h, training=True)
+
         i = RandomNormal(stddev=1e-1)
 
         def ConvBlock(filters, kernel=3, strides=1, activation='relu'):
@@ -188,7 +187,7 @@ class GAN():
         x = ConvBlock(m, kernels)(x)
         outputs = Conv2D(1, (3, 3), padding='same',
                          activation='tanh', name='output')(x)
-        return Model(inputs=[H, Z], outputs=outputs, name='generator')
+        return Model(inputs=H, outputs=outputs, name='generator')
 
     def train(self, epochs: int, dataset: Tuple[np.ndarray], batch_size=128, save_per_epochs=5, log_per_steps=5):
         gan_names = ['gan_loss']
@@ -203,8 +202,7 @@ class GAN():
             # Init iterator
             data_it = DataIterator(
                 dataset, batch_size, self.patch_size, self.patch_per_image)
-            data_hz = HexagonDataIterator(
-                batch_size, self.patch_size, self.patch_per_image * len(dataset), self.noise_size)
+            data_hz = HexagonDataIterator(batch_size, self.patch_size, self.patch_per_image * len(dataset))
             steps = len(data_it)
             assert steps > log_per_steps
 
@@ -215,9 +213,9 @@ class GAN():
             labels_join = tf.concat([real_labels, fake_labels], axis=0)
 
             # Training discriminator loop
-            for step, ((gts, images_real), (h, z)) in enumerate(zip(data_it, data_hz)):
+            for step, ((gts, images_real), h) in enumerate(zip(data_it, data_hz)):
                 # Concatenate fake with true
-                image_fake = self.g_model.predict_on_batch([h, z])
+                image_fake = self.g_model.predict_on_batch(h)
 
                 # Train discriminator on predicted and real and fake data
                 gts_join = tf.concat([gts, h], axis=0)
@@ -226,11 +224,10 @@ class GAN():
                     [gts_join, images_join], labels_join)
 
                 # Train generator directly
-                zt = tf.random.normal((len(gts), *self.noise_size))
-                metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
+                metrics_g = self.g_model.train_on_batch(gts, images_real)
 
                 # Train generator via discriminator
-                metrics_gan = self.gan.train_on_batch([h, z], real_labels)
+                metrics_gan = self.gan.train_on_batch(h, real_labels)
 
                 # Store generator and discriminator metrics
                 if step % log_per_steps == log_per_steps - 1:

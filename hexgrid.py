@@ -7,9 +7,6 @@ import itertools
 
 
 def closest(points: np.ndarray, xy: np.ndarray, k=1) -> np.ndarray:
-    # distance = np.linalg.norm(points-xy, axis=1)
-    # distance = np.sqrt(np.sum((points - xy) ** 2, axis=1))
-    # distance = np.sum((points - xy) ** 2, axis=1)
     distance = np.sum(np.abs(points - xy), axis=1)
     return np.argpartition(distance, k)[:k]
 
@@ -48,7 +45,7 @@ def grid_create_hexagons(hex_size: float = 30, neatness: float = 0.7, width: int
         points += np.random.randint(-rand_localize //
                                     2, rand_localize//2, (len(points), 2))
 
-    if random_shift is not None:
+    if random_shift is not None and random_shift > 1:
         points += np.random.randint(0, random_shift)
 
     grid = np.zeros((width, height, 1))

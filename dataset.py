@@ -3,17 +3,19 @@ Dataset
 
 @author: Adrian Kucharski
 """
+import json
+import os
 from typing import Tuple
-from matplotlib import pyplot as plt
 
 import numpy as np
-from skimage import io, transform, morphology
-import os
 import tensorflow as tf
+from matplotlib import pyplot as plt
+from skimage import io, morphology, transform
+from tensorflow.keras.models import Model, load_model
+
 from hexgrid import generate_hexagons, grid_create_hexagons
 from util import add_salt_and_pepper, normalization, time_measure
-import json
-from tensorflow.keras.models import load_model, Model
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
@@ -53,13 +55,12 @@ def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
-    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64,)):
+    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30):
         """Initialization
         Dataset is (x, y, roi)"""
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.total_patches = total_patches
-        self.noise_size = noise_size
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -71,14 +72,12 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         # Generate indexes of the batch
         idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
         h = self.h[idx]
-        z = self.z[idx]
-        return h, z
+        return h
 
     def on_epoch_end(self):
         'Generate new hexagons after one epoch'
         self.h = generate_hexagons(self.total_patches,
                                    (17, 21), 0.65, random_shift=8)
-        self.z = np.random.normal(0, 1, (self.total_patches, *self.noise_size))
 
 
 class DataIterator(tf.keras.utils.Sequence):

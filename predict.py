@@ -1,25 +1,23 @@
-from skimage import io, filters, morphology
-from skimage.morphology import square
 import os
 from pathlib import Path
-import numpy as np
-from dataset import load_dataset, DataIterator, HexagonDataIterator
-import matplotlib.pyplot as plt
-from tensorflow.keras.models import Model, load_model
-from util import add_salt_and_pepper, normalization
 
+import matplotlib.pyplot as plt
+import numpy as np
+from skimage import filters, io, morphology
+from skimage.morphology import square
+from tensorflow.keras.models import Model, load_model
+
+from dataset import DataIterator, HexagonDataIterator, load_dataset
+from util import add_salt_and_pepper, normalization
 
 if __name__ == '__main__':
     model: Model = load_model(r'generator\models\20220325-1620\model_last.h5')
     if 0:
         data = HexagonDataIterator(1, 64, 5, noise_size=(64,64,1))
-        for x, z in data:
-            # plt.imshow(x[0], cmap='gray')
-            # plt.show()
-            # x = morphology.dilation(x[0, ..., 0], morphology.square(2))[np.newaxis, ..., np.newaxis]
+        for x in data:
             xsap = add_salt_and_pepper(x, 0.1)
-            psap = ((model.predict_on_batch([xsap, z])[0] + 1) / 2)
-            p = ((model.predict_on_batch([x, z])[0] + 1) / 2)
+            psap = ((model.predict_on_batch(xsap)[0] + 1) / 2)
+            p = ((model.predict_on_batch(x)[0] + 1) / 2)
             print(p.shape)
             x = x[0]
             xsap = xsap[0]
@@ -30,9 +28,8 @@ if __name__ == '__main__':
         train, test  = load_dataset(r'datasets\Alizarine\folds.json')[0]
         data = DataIterator(test, batch_size=1, patch_per_image=10)
         for x, y in data:
-            z = np.random.normal(size=x.shape)
             xsap = add_salt_and_pepper(x, sap_ratio=0.05, salt_value=0.8, keep_edges=False)
-            p = model.predict_on_batch([xsap, z])[0]
+            p = model.predict_on_batch(xsap)[0]
             x = x[0]
             y = y[0]
             xsap = xsap[0]

@@ -9,3 +9,5 @@ logs.txt
 *.gif
 temp.py
 create_animation.py
+mainApp.py
+/app/
