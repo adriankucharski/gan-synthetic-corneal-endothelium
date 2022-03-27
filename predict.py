@@ -11,7 +11,7 @@ from dataset import DataIterator, HexagonDataIterator, load_dataset
 from util import add_salt_and_pepper, normalization
 
 if __name__ == '__main__':
-    model: Model = load_model(r'generator\models\20220325-1620\model_last.h5')
+    model: Model = load_model(r'generator\models\20220327-2112\model_last.h5')
     if 0:
         data = HexagonDataIterator(1, 64, 5, noise_size=(64,64,1))
         for x in data:

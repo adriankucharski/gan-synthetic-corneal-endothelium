@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 if __name__ == '__main__':
     im_name = 'org_1.png'
-    path = r'data\images\20220326-0132\*'
+    path = r'data\images\20220327-2229\*'
 
     frames = []
     for dir_name in sorted(glob(path), key=lambda x: int(Path(x).name)):
@@ -23,4 +23,4 @@ if __name__ == '__main__':
     
     frame = frames.pop(0)
     frame.save(fp='gif.gif', format='GIF', append_images=frames,
-         save_all=True, duration=300, loop=1)
+         save_all=True, duration=400, loop=1)

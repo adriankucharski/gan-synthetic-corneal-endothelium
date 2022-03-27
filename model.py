@@ -73,6 +73,7 @@ class GAN():
         np.random.seed(7312)
         h = HexagonDataIterator(num_of_test, self.patch_size, num_of_test)
         np.random.seed(None)
+        h = h[0]
         y = normalize(self.g_model.predict_on_batch(h))
 
         path = self.evaluate_path_save
@@ -142,7 +143,6 @@ class GAN():
         x = Conv2D(256, (5, 5), strides=(2, 2),
                    padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
-        x = Dropout(0.5)(x)
 
         x = Conv2D(512, (5, 5), strides=(2, 2),
                    padding='same', kernel_initializer=i)(x)
@@ -155,10 +155,8 @@ class GAN():
     def _generator_model(self):
         H = h = Input(self.input_size, name='mask')
         h = Rescaling(scale=2.0, offset=-1.0)(h)
-        x = GaussianNoise(1)(h, training=True)
-
+        x = GaussianNoise(1e-1)(h, training=True)
         i = RandomNormal(stddev=1e-1)
-
         def ConvBlock(filters, kernel=3, strides=1, activation='relu'):
             return Sequential([
                 Conv2D(filters, kernel, strides=strides,
@@ -172,7 +170,6 @@ class GAN():
         filters, n, m = [32, 64, 128], 128, 32
         for f in filters:
             x = ConvBlock(f, kernel=kernels, strides=(1, 1))(x)
-            x = Dropout(0.25)(x)
             encoder.append(x)
             x = ConvBlock(f, kernel=kernels, strides=(2, 2))(x)
 
