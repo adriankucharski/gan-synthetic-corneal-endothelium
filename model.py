@@ -5,19 +5,21 @@ Colorize GAN architecture.
 import datetime
 import os
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
 from skimage import io
+from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.layers import (Activation, BatchNormalization,
-                                     Concatenate, Conv2D, Dense, Dropout,
-                                     Flatten, Input, LeakyReLU, Conv2DTranspose,)
+                                     Concatenate, Conv2D, Conv2DTranspose,
+                                     Dense, Dropout, Flatten, Input, LeakyReLU,
+                                     MaxPool2D)
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.initializers import RandomNormal
 from tqdm import tqdm
-from typing import Tuple
+
 from dataset import DataIterator, HexagonDataIterator
 
 np.set_printoptions(suppress=True)
@@ -46,13 +48,13 @@ class GAN():
 
         self.g_model = self._generator_model()
         self.g_model.compile(
-            optimizer=Adam(2e-5),
+            optimizer=Adam(1e-5),
             loss='mae',
         )
 
         self.d_model = self._discriminator_model()
         self.d_model.compile(
-            optimizer=Adam(5e-4, beta_1=0.5),
+            optimizer=Adam(2e-4, beta_1=0.5),
             loss=BinaryCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
@@ -118,26 +120,28 @@ class GAN():
     def _discriminator_model(self):
         h = Input(self.input_disc_size, name='mask')
         t = Input(self.input_disc_size, name='image')
-        i = RandomNormal(stddev=1e-1)
+        i = RandomNormal(stddev=1e-2)
         inputs = Concatenate()([h, t])
-        x = Conv2D(128, 4, 2, padding='same', kernel_initializer=i)(inputs)
+        x = Conv2D(64, 5, padding='same', kernel_initializer=i)(inputs)
         x = LeakyReLU(0.2)(x)
+        x = MaxPool2D((2,2))(x)
 
-        x = Conv2D(128, 4, 2, padding='same', kernel_initializer=i)(x)
+        x = Conv2D(128, 5, padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
+        x = MaxPool2D((2,2))(x)
         x = Dropout(0.5)(x)
 
-        x = Conv2D(256, 4, padding='same', kernel_initializer=i, use_bias=False)(x)
+        x = Conv2D(256, 5, padding='same', kernel_initializer=i, use_bias=False)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
 
-        x = Conv2D(1, 4, kernel_initializer=i)(x)
+        x = Conv2D(1, 5, kernel_initializer=i)(x)
         return Model(inputs=[h, t], outputs=x, name='discriminator')
 
     def _generator_model(self):
         H = h = Input(self.input_size, name='mask')
         Z = z = Input(self.noise_size, name='noise')
         x = Concatenate()([h, z])
-        i = RandomNormal(stddev=1e-1)
+        i = RandomNormal(stddev=1e-2)
 
         def ConvBlock(filters, kernel=3, strides=1, activation='relu'):
             return Sequential([
@@ -151,21 +155,21 @@ class GAN():
         kernels = 3
         filters, n, m = [32, 64, 128], 128, 32
         for f in filters:
-            x = ConvBlock(f, kernel=kernels, strides=(1, 1))(x)
+            x = ConvBlock(f * 2, kernel=kernels, strides=(1, 1))(x)
             x = Dropout(0.25)(x)
             encoder.append(x)
-            x = ConvBlock(f, kernel=kernels, strides=(2, 2))(x)
+            x = MaxPool2D((2,2))(x)
+            # x = ConvBlock(f, kernel=kernels, strides=(2, 2))(x)
 
         x = ConvBlock(n, kernel=kernels)(x)
 
         for f in filters[::-1]:
-            x = Conv2DTranspose(f, kernels, (2, 2),
-                                padding='same', activation='relu')(x)
+            x = Conv2DTranspose(f, kernels, (2, 2),padding='same', activation='relu')(x)
             x = ConvBlock(f, kernel=kernels)(x)
             x = Concatenate()([encoder.pop(), x])
 
         x = ConvBlock(m, kernels)(x)
-        outputs = Conv2D(1, (3, 3), padding='same',
+        outputs = Conv2D(1, kernels, padding='same',
                          activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
