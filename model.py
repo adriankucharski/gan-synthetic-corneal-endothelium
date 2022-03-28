@@ -47,7 +47,7 @@ class GAN():
 
         self.g_model = self._generator_model()
         self.g_model.compile(
-            optimizer=Adam(1e-5),
+            optimizer=Adam(1e-3),
             loss='mae',
         )
 
@@ -199,7 +199,7 @@ class GAN():
             # Init iterator
             data_it = DataIterator(
                 dataset, batch_size, self.patch_size, self.patch_per_image)
-            data_hz = HexagonDataIterator(batch_size, self.patch_size, self.patch_per_image * len(dataset))
+            data_h = HexagonDataIterator(batch_size, self.patch_size, self.patch_per_image * len(dataset))
             steps = len(data_it)
             assert steps > log_per_steps
 
@@ -210,7 +210,7 @@ class GAN():
             labels_join = tf.concat([real_labels, fake_labels], axis=0)
 
             # Training discriminator loop
-            for step, ((gts, images_real), h) in enumerate(zip(data_it, data_hz)):
+            for step, ((gts, images_real), h) in enumerate(zip(data_it, data_h)):
                 # Concatenate fake with true
                 image_fake = self.g_model.predict_on_batch(h)
 
