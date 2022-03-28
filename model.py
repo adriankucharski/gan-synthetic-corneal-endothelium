@@ -46,13 +46,13 @@ class GAN():
 
         self.g_model = self._generator_model()
         self.g_model.compile(
-            optimizer=Adam(1e-5),
+            optimizer=Adam(2e-5),
             loss='mae',
         )
 
         self.d_model = self._discriminator_model()
         self.d_model.compile(
-            optimizer=Adam(2e-4, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(5e-4, beta_1=0.5),
             loss=BinaryCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
@@ -62,7 +62,7 @@ class GAN():
 
         self.gan = self._gan_model()
         self.gan.compile(
-            optimizer=Adam(1e-4, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(2e-4, beta_1=0.5),
             loss=BinaryCrossentropy(from_logits=True),
         )
         self._create_dirs()
@@ -120,25 +120,17 @@ class GAN():
         t = Input(self.input_disc_size, name='image')
         i = RandomNormal(stddev=1e-1)
         inputs = Concatenate()([h, t])
-        x = Conv2D(64, (5, 5), padding='same', kernel_initializer=i)(inputs)
+        x = Conv2D(128, 4, 2, padding='same', kernel_initializer=i)(inputs)
         x = LeakyReLU(0.2)(x)
 
-        x = Conv2D(128, (5, 5), strides=(2, 2),
-                   padding='same', kernel_initializer=i)(x)
+        x = Conv2D(128, 4, 2, padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
         x = Dropout(0.5)(x)
 
-        x = Conv2D(256, (5, 5), strides=(2, 2),
-                   padding='same', kernel_initializer=i)(x)
+        x = Conv2D(256, 4, padding='same', kernel_initializer=i, use_bias=False)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
-        x = Dropout(0.5)(x)
 
-        x = Conv2D(512, (5, 5), strides=(2, 2),
-                   padding='same', kernel_initializer=i)(x)
-        x = LeakyReLU(0.3)(BatchNormalization()(x))
-
-        x = Flatten()(x)
-        x = Dense(1)(x)
+        x = Conv2D(1, 4, kernel_initializer=i)(x)
         return Model(inputs=[h, t], outputs=x, name='discriminator')
 
     def _generator_model(self):
@@ -178,6 +170,11 @@ class GAN():
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
     def train(self, epochs: int, dataset: Tuple[np.ndarray], evaluate_data: Tuple[np.ndarray] = None, batch_size=128, save_per_epochs=5, log_per_steps=5):
+        # Prepare label arrays for D and GAN training 
+        real_labels = tf.ones((batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
+        fake_labels = tf.zeros((batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
+        labels_join = tf.concat([real_labels, fake_labels], axis=0)
+
         for epoch in tqdm(range(epochs)):
             # Init iterator
             data_it = DataIterator(
@@ -186,13 +183,6 @@ class GAN():
                 batch_size, self.patch_size, self.patch_per_image * len(dataset), self.noise_size)
             steps = len(data_it)
             assert steps > log_per_steps
-
-            # real is for real images values
-            # fake is for predicted pix2pix values
-            real_labels = tf.ones((batch_size, 1), dtype=tf.float32)
-            fake_labels = tf.zeros((batch_size, 1), dtype=tf.float32)
-            labels_join = tf.concat([real_labels, fake_labels], axis=0)
-  
 
             # Training discriminator loop
             for step, ((gts, images_real), (h, z)) in enumerate(zip(data_it, data_hz)):
@@ -205,13 +195,13 @@ class GAN():
                 metrics_d = self.d_model.train_on_batch(
                     [gts_join, images_join], labels_join)
 
-                # Train generator via discriminator
-                metrics_gan = self.gan.train_on_batch([h, z], real_labels)
-
                 # Train generator directly
-                if step % 2 == 0:
-                    zt = tf.random.normal((len(gts), *self.noise_size))
-                    metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
+                z = tf.random.normal((len(gts), *self.noise_size))
+                metrics_g = self.g_model.train_on_batch([gts, z], images_real)
+
+                # Train generator via discriminator
+                z = tf.random.normal((len(h), *self.noise_size))
+                metrics_gan = self.gan.train_on_batch([h, z], real_labels)
 
                 # Store generator and discriminator metrics
                 if step % log_per_steps == log_per_steps - 1:
