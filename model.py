@@ -192,6 +192,7 @@ class GAN():
             real_labels = tf.ones((batch_size, 1), dtype=tf.float32)
             fake_labels = tf.zeros((batch_size, 1), dtype=tf.float32)
             labels_join = tf.concat([real_labels, fake_labels], axis=0)
+  
 
             # Training discriminator loop
             for step, ((gts, images_real), (h, z)) in enumerate(zip(data_it, data_hz)):
@@ -208,9 +209,9 @@ class GAN():
                 metrics_gan = self.gan.train_on_batch([h, z], real_labels)
 
                 # Train generator directly
-                # if step % 2 == 1:
-                zt = tf.random.normal((len(gts), *self.noise_size))
-                metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
+                if step % 2 == 0:
+                    zt = tf.random.normal((len(gts), *self.noise_size))
+                    metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
 
                 # Store generator and discriminator metrics
                 if step % log_per_steps == log_per_steps - 1:
