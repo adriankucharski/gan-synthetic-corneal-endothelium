@@ -52,12 +52,12 @@ class GAN():
 
         self.d_model = self._discriminator_model()
         self.d_model.compile(
-            optimizer=Adam(1e-4, beta_1=0.5, clipnorm=1e-3),
+            optimizer=Adam(2e-4, beta_1=0.5, clipnorm=1e-3),
             loss=BinaryCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
 
-        # Disable discriminator training during gan training
+        # Disable a discriminator training during gan training
         self.d_model.trainable = False
 
         self.gan = self._gan_model()
@@ -67,31 +67,20 @@ class GAN():
         )
         self._create_dirs()
         self.writer = tf.summary.create_file_writer(self.log_path)
+        self.gan_log_names = ['gan_loss']
+        self.d_log_names = ['d_loss', 'd_acc']
+        self.g_log_names = ['g_loss']
 
-    def _evaluate(self, epoch: int = None, num_of_test=8, data=None):
-        np.random.seed(7312)
-        data_hz = HexagonDataIterator(
-            num_of_test, self.patch_size, num_of_test, self.noise_size)
-        np.random.seed(None)
-        h, z = data_hz.h, data_hz.z
-        y = (self.g_model.predict_on_batch([h, z]) + 1) / 2.0
-
-        path = self.evaluate_path_save
-        if epoch is not None:
+    def _evaluate(self, epoch: int, data=None):
+        if data is not None:
             path = os.path.join(self.evaluate_path_save, str(epoch))
             Path(path).mkdir(parents=True, exist_ok=True)
-
-        for i in range(num_of_test):
-            impath = os.path.join(path, f'{i}.png')
-            io.imsave(impath, np.array(np.concatenate(
-                [h[i], y[i]], axis=1) * 255, 'uint8'))
-
-        if data is not None:
-            z = np.random.normal(size=(len(data), *self.noise_size))
-            xdata = data[:, 0, ...]
+            
+            xdata, ydata = data
+            z = np.random.normal(size=(len(xdata), *self.noise_size))
             pred = (self.g_model.predict_on_batch([xdata, z]) + 1) / 2.0
-            for i in range(len(data)):
-                x, y = data[i]
+            for i in range(len(xdata)):
+                x, y = xdata[i], ydata[i]
                 impath = os.path.join(path, f'org_{i}.png')
                 io.imsave(impath, np.array(np.concatenate(
                     [x, pred[i], (y + 1) / 2.0], axis=1) * 255, 'uint8'))
@@ -116,10 +105,8 @@ class GAN():
         self.g_path_save = os.path.join(self.g_path_save, time)
         self.d_path_save = os.path.join(self.d_path_save, time)
         self.evaluate_path_save = os.path.join(self.evaluate_path_save, time)
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
-        Path(self.g_path_save).mkdir(parents=True, exist_ok=True)
-        Path(self.d_path_save).mkdir(parents=True, exist_ok=True)
-        Path(self.evaluate_path_save).mkdir(parents=True, exist_ok=True)
+        for path in [self.log_path, self.g_path_save, self.d_path_save, self.evaluate_path_save]:
+            Path(path).mkdir(parents=True, exist_ok=True)
 
     def _gan_model(self):
         H = h = Input(self.input_size, name='mask')
@@ -190,15 +177,7 @@ class GAN():
                          activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
-    def train(self, epochs: int, dataset: Tuple[np.ndarray], batch_size=128, save_per_epochs=5, log_per_steps=5):
-        gan_names = ['gan_loss']
-        d_names = ['d_loss', 'd_acc']
-        g_names = ['g_loss']
-
-        val_data = [[x[0], y[0]] for x, y in DataIterator(
-            dataset, batch_size=1, patch_per_image=1)][0:8]
-        val_data = np.array(val_data)
-
+    def train(self, epochs: int, dataset: Tuple[np.ndarray], evaluate_data: Tuple[np.ndarray] = None, batch_size=128, save_per_epochs=5, log_per_steps=5):
         for epoch in tqdm(range(epochs)):
             # Init iterator
             data_it = DataIterator(
@@ -225,23 +204,24 @@ class GAN():
                 metrics_d = self.d_model.train_on_batch(
                     [gts_join, images_join], labels_join)
 
-                # Train generator directly
-                zt = tf.random.normal((len(gts), *self.noise_size))
-                metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
-
                 # Train generator via discriminator
                 metrics_gan = self.gan.train_on_batch([h, z], real_labels)
+
+                # Train generator directly
+                # if step % 2 == 1:
+                zt = tf.random.normal((len(gts), *self.noise_size))
+                metrics_g = self.g_model.train_on_batch([gts, zt], images_real)
 
                 # Store generator and discriminator metrics
                 if step % log_per_steps == log_per_steps - 1:
                     tf.summary.experimental.set_step(epoch * steps + step)
-                    self._write_log(gan_names, [metrics_gan])
-                    self._write_log(g_names, [metrics_g])
-                    self._write_log(d_names, metrics_d)
+                    self._write_log(self.gan_log_names, [metrics_gan])
+                    self._write_log(self.g_log_names, [metrics_g])
+                    self._write_log(self.d_log_names, metrics_d)
 
             self._save_models('model_last.h5', 'model_last.h5')
             if (epoch + 1) % save_per_epochs == 0:
-                self._evaluate(epoch=epoch, data=val_data)
+                self._evaluate(epoch=epoch, data=evaluate_data)
                 self._save_models(f'model_{epoch}.h5')
 
     def summary(self):

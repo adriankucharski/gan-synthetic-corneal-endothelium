@@ -53,13 +53,15 @@ def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
-    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64,)):
+    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64,64,1), hexagon_size=(17, 21), neatness_range=(0.55, 0.70)):
         """Initialization
         Dataset is (x, y, roi)"""
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.total_patches = total_patches
         self.noise_size = noise_size
+        self.hexagon_size = hexagon_size
+        self.neatness_range = neatness_range
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -76,8 +78,9 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
 
     def on_epoch_end(self):
         'Generate new hexagons after one epoch'
+        neatness = np.random.uniform(*self.neatness_range)
         self.h = generate_hexagons(self.total_patches,
-                                   (17, 21), 0.65, random_shift=8)
+                                   self.hexagon_size, neatness, random_shift=8)
         self.z = np.random.normal(0, 1, (self.total_patches, *self.noise_size))
 
 
@@ -129,7 +132,9 @@ class DataIterator(tf.keras.utils.Sequence):
                 self.y.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
 
         self.x, self.y = np.array(self.x), np.array(self.y)
-
+    
+    def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
+        return self.y, self.x
 
 class HexagonDataGenerator():
     def __init__(self,
