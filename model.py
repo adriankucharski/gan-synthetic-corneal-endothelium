@@ -144,34 +144,25 @@ class GAN():
         H = h = Input(self.input_size, name='mask')
         Z = z = Input(self.noise_size, name='noise')
         x = Concatenate()([h, z])
-        i = RandomNormal(stddev=1e-2)
-
-        def ConvBlock(filters, kernel=3, strides=1, activation='relu'):
-            return Sequential([
-                Conv2D(filters, kernel, strides=strides,
-                       padding='same', kernel_initializer=i),
-                Activation(activation)
-            ])
 
         encoder = []
         kernels = 3
         filters, n, m = [16, 32, 64], 64, 16
         for f in filters:
-            x = ConvBlock(f, kernel=kernels)(x)
+            x = Conv2D(f, kernels, padding='same', activation='relu')(x)
             encoder.append(x)
             x = MaxPool2D((2, 2))(x)
 
-        x = ConvBlock(n, kernel=kernels)(x)
+        x = x = Conv2D(n, kernels, padding='same', activation='relu')(x)
 
         for f in filters[::-1]:
             x = UpSampling2D((2, 2))(x)
-            x = ConvBlock(f, kernel=kernels)(x)
+            x = Conv2D(f, kernels, padding='same', activation='relu')(x)
             x = Concatenate()([encoder.pop(), x])
 
-        x = GaussianDropout(0.1)(x, training=True)
-        x = ConvBlock(m, kernels)(x)
-        outputs = Conv2D(1, 3, padding='same',
-                         activation='tanh', name='output')(x)
+        x = GaussianDropout(0.2)(x, training=True)
+        x = Conv2D(m, kernels, padding='same', activation='relu')(x)
+        outputs = Conv2D(1, 3, padding='same', activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
     def train(self, epochs: int, dataset: Tuple[np.ndarray], evaluate_data: Tuple[np.ndarray] = None, batch_size=128, save_per_epochs=5, log_per_steps=5):
