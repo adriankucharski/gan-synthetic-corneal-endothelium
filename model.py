@@ -11,11 +11,11 @@ import numpy as np
 import tensorflow as tf
 from skimage import io
 from tensorflow.keras.initializers import RandomNormal
-from tensorflow.keras.layers import (Activation, BatchNormalization,
-                                     Concatenate, Conv2D, Conv2DTranspose,
+from tensorflow.keras.layers import (Activation, BatchNormalization, GaussianNoise, GaussianDropout,
+                                     Concatenate, Conv2D, Conv2DTranspose, UpSampling2D,
                                      Dense, Dropout, Flatten, Input, LeakyReLU,
                                      MaxPool2D)
-from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.losses import BinaryCrossentropy, Hinge
 from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.optimizers import Adam
 from tqdm import tqdm
@@ -55,7 +55,7 @@ class GAN():
         self.d_model = self._discriminator_model()
         self.d_model.compile(
             optimizer=Adam(2e-4, beta_1=0.5),
-            loss=BinaryCrossentropy(from_logits=True),
+            loss=BinaryCrossentropy(),
             metrics=['accuracy']
         )
 
@@ -65,7 +65,7 @@ class GAN():
         self.gan = self._gan_model()
         self.gan.compile(
             optimizer=Adam(2e-4, beta_1=0.5),
-            loss=BinaryCrossentropy(from_logits=True),
+            loss=BinaryCrossentropy(),
         )
         self._create_dirs()
         self.writer = tf.summary.create_file_writer(self.log_path)
@@ -77,7 +77,7 @@ class GAN():
         if data is not None:
             path = os.path.join(self.evaluate_path_save, str(epoch))
             Path(path).mkdir(parents=True, exist_ok=True)
-            
+
             xdata, ydata = data
             z = np.random.normal(size=(len(xdata), *self.noise_size))
             pred = (self.g_model.predict_on_batch([xdata, z]) + 1) / 2.0
@@ -124,17 +124,20 @@ class GAN():
         inputs = Concatenate()([h, t])
         x = Conv2D(64, 5, padding='same', kernel_initializer=i)(inputs)
         x = LeakyReLU(0.2)(x)
-        x = MaxPool2D((2,2))(x)
+        x = MaxPool2D((2, 2))(x)
+
+        x = Dropout(0.25)(x)
 
         x = Conv2D(128, 5, padding='same', kernel_initializer=i)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
-        x = MaxPool2D((2,2))(x)
-        x = Dropout(0.5)(x)
+        x = MaxPool2D((2, 2))(x)
 
-        x = Conv2D(256, 5, padding='same', kernel_initializer=i, use_bias=False)(x)
+        x = Conv2D(256, 5, kernel_initializer=i)(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
 
-        x = Conv2D(1, 5, kernel_initializer=i)(x)
+        x = Conv2D(1, 5, kernel_initializer=i,
+                   padding='same', activation='sigmoid')(x)
+        # x = Dense(1, kernel_initializer=i)(Flatten()(x))
         return Model(inputs=[h, t], outputs=x, name='discriminator')
 
     def _generator_model(self):
@@ -147,44 +150,44 @@ class GAN():
             return Sequential([
                 Conv2D(filters, kernel, strides=strides,
                        padding='same', kernel_initializer=i),
-                BatchNormalization(),
                 Activation(activation)
             ])
 
         encoder = []
         kernels = 3
-        filters, n, m = [32, 64, 128], 128, 32
+        filters, n, m = [16, 32, 64], 64, 16
         for f in filters:
-            x = ConvBlock(f * 2, kernel=kernels, strides=(1, 1))(x)
-            x = Dropout(0.25)(x)
+            x = ConvBlock(f, kernel=kernels)(x)
             encoder.append(x)
-            x = MaxPool2D((2,2))(x)
-            # x = ConvBlock(f, kernel=kernels, strides=(2, 2))(x)
+            x = MaxPool2D((2, 2))(x)
 
         x = ConvBlock(n, kernel=kernels)(x)
 
         for f in filters[::-1]:
-            x = Conv2DTranspose(f, kernels, (2, 2),padding='same', activation='relu')(x)
+            x = UpSampling2D((2, 2))(x)
             x = ConvBlock(f, kernel=kernels)(x)
             x = Concatenate()([encoder.pop(), x])
 
+        x = GaussianDropout(0.1)(x, training=True)
         x = ConvBlock(m, kernels)(x)
-        outputs = Conv2D(1, kernels, padding='same',
+        outputs = Conv2D(1, 3, padding='same',
                          activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
     def train(self, epochs: int, dataset: Tuple[np.ndarray], evaluate_data: Tuple[np.ndarray] = None, batch_size=128, save_per_epochs=5, log_per_steps=5):
-        # Prepare label arrays for D and GAN training 
-        real_labels = tf.ones((batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
-        fake_labels = tf.zeros((batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
+        # Prepare label arrays for D and GAN training
+        real_labels = tf.ones(
+            (batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
+        fake_labels = tf.zeros(
+            (batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
         labels_join = tf.concat([real_labels, fake_labels], axis=0)
 
         for epoch in tqdm(range(epochs)):
             # Init iterator
             data_it = DataIterator(
-                dataset, batch_size, self.patch_size, self.patch_per_image)
+                dataset, batch_size, self.patch_size, self.patch_per_image, inv_values=True)
             data_hz = HexagonDataIterator(
-                batch_size, self.patch_size, self.patch_per_image * len(dataset), self.noise_size)
+                batch_size, self.patch_size, self.patch_per_image * len(dataset), self.noise_size, inv_values=True)
             steps = len(data_it)
             assert steps > log_per_steps
 

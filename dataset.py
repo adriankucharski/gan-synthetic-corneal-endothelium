@@ -53,7 +53,7 @@ def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
-    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64,64,1), hexagon_size=(17, 21), neatness_range=(0.55, 0.70)):
+    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64, 64, 1), hexagon_size=(17, 21), neatness_range=(0.55, 0.70), normalize=False, inv_values = True):
         """Initialization
         Dataset is (x, y, roi)"""
         self.batch_size = batch_size
@@ -62,6 +62,8 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         self.noise_size = noise_size
         self.hexagon_size = hexagon_size
         self.neatness_range = neatness_range
+        self.normalize = normalize
+        self.inv_values = inv_values
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -83,17 +85,29 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
                                    self.hexagon_size, neatness, random_shift=8)
         self.z = np.random.normal(0, 1, (self.total_patches, *self.noise_size))
 
+        if self.inv_values:
+            self.h = 1 - self.h
+            
+        if self.normalize: 
+            self.h = (self.h + 1) / 2
+
 
 class DataIterator(tf.keras.utils.Sequence):
     'Generates data for Keras'
 
-    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768):
-        """Initialization
-        Dataset is (x, y, roi)"""
+    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, normalize=False, inv_values = True):
+        """
+        Initialization
+        Dataset is (x, y, roi)
+        Inv_values - [0 - cell, 1 - edge] -> [0 - edge, 1 - cell] 
+        Normalize - [0, 1] -> [-1, +1]
+        """
         self.dataset = dataset
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.patch_per_image = patch_per_image
+        self.normalize = normalize
+        self.inv_values = inv_values
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -101,7 +115,7 @@ class DataIterator(tf.keras.utils.Sequence):
         return len(self.x) // self.batch_size
 
     def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
-        'Generate one batch of data'
+        'Generate one batch of data and returns y, x (mask, image)'
         # Generate indexes of the batch
         idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
         x = self.x[idx]
@@ -132,9 +146,15 @@ class DataIterator(tf.keras.utils.Sequence):
                 self.y.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
 
         self.x, self.y = np.array(self.x), np.array(self.y)
-    
+        if self.inv_values:
+            self.y = 1 - self.y
+
+        if self.normalize:
+            self.x, self.y = (self.x + 1) / 2, (self.y + 1) / 2
+
     def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
         return self.y, self.x
+
 
 class HexagonDataGenerator():
     def __init__(self,
@@ -176,11 +196,13 @@ class HexagonDataGenerator():
         for i in range(self.batch_size):
             hexagon = grid_create_hexagons(
                 hex_size[i], neatness[i], self.patch_size, self.patch_size, random_shift[i])[np.newaxis, ...]
-            salted_hexagon = add_salt_and_pepper(hexagon, sap_ratio[i], salt_value[i], keep_edges[i])
+            salted_hexagon = add_salt_and_pepper(
+                hexagon, sap_ratio[i], salt_value[i], keep_edges[i])
             z = np.random.normal(size=hexagon.shape)
             data.append(np.concatenate([salted_hexagon, z, hexagon], axis=0))
         data = np.array(data)
-        generated_images = self.model.predict_on_batch([data[:, 0, ...], data[:, 1, ...]])
+        generated_images = self.model.predict_on_batch(
+            [data[:, 0, ...], data[:, 1, ...]])
         return data[:, 2, ...], normalization(generated_images)
 
     def __iter__(self):
@@ -198,7 +220,7 @@ class HexagonDataGenerator():
 
 if __name__ == "__main__":
     gen = HexagonDataGenerator(r'generator\models\20220325-1620\model_last.h5')
-    
+
     # print(time_measure(lambda: [y for y in zip(range(1000), gen)]))
     for i, g in zip(range(200), gen):
         gt, image = g

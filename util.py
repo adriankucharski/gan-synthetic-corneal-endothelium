@@ -27,6 +27,7 @@ def mapFromTo(x: np.ndarray, curr_min: float, curr_max: float, new_min: float, n
 def normalization(x: np.ndarray) -> np.ndarray:
     return (x - x.min()) / (x.max() - x.min())
 
+
 def scale(x: np.ndarray, low=-1, high=1) -> np.ndarray:
     assert low < high
     return (x - np.min(x)) * (high - low) / (np.max(x) - np.min(x)) + low
