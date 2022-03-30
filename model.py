@@ -5,7 +5,7 @@ Colorize GAN architecture.
 import datetime
 import os
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import tensorflow as tf
@@ -33,7 +33,9 @@ class GAN():
                  evaluate_path_save='data/images/',
                  log_path='logs/gan/',
                  patch_size=64,
-                 patch_per_image=768
+                 patch_per_image=768,
+                 g_path_last_name_save='model_last.h5',
+                 d_path_last_name_save='model_last.h5'
                  ):
         self.log_path = log_path
         self.g_path_save = g_path_save
@@ -41,6 +43,8 @@ class GAN():
         self.evaluate_path_save = evaluate_path_save
         self.patch_size = patch_size
         self.patch_per_image = patch_per_image
+        self.g_path_last_name_save = g_path_last_name_save
+        self.d_path_last_name_save = d_path_last_name_save
 
         self.noise_size = (patch_size, patch_size, 1)
         self.input_size = (patch_size, patch_size, 1)
@@ -55,7 +59,7 @@ class GAN():
         self.d_model = self._discriminator_model()
         self.d_model.compile(
             optimizer=Adam(2e-4, beta_1=0.5),
-            loss=BinaryCrossentropy(),
+            loss='binary_crossentropy',
             metrics=['accuracy']
         )
 
@@ -65,7 +69,7 @@ class GAN():
         self.gan = self._gan_model()
         self.gan.compile(
             optimizer=Adam(2e-4, beta_1=0.5),
-            loss=BinaryCrossentropy(),
+            loss='binary_crossentropy',
         )
         self._create_dirs()
         self.writer = tf.summary.create_file_writer(self.log_path)
@@ -73,19 +77,25 @@ class GAN():
         self.d_log_names = ['d_loss', 'd_acc']
         self.g_log_names = ['g_loss']
 
-    def _evaluate(self, epoch: int, data=None):
+    def _evaluate(self, epoch: int, data: Tuple[np.ndarray, np.ndarray]=None) -> Union[None, Tuple[np.ndarray]]:
         if data is not None:
+            images = []
             path = os.path.join(self.evaluate_path_save, str(epoch))
             Path(path).mkdir(parents=True, exist_ok=True)
 
             xdata, ydata = data
             z = np.random.normal(size=(len(xdata), *self.noise_size))
             pred = (self.g_model.predict_on_batch([xdata, z]) + 1) / 2.0
+
             for i in range(len(xdata)):
                 x, y = xdata[i], ydata[i]
                 impath = os.path.join(path, f'org_{i}.png')
-                io.imsave(impath, np.array(np.concatenate(
-                    [x, pred[i], (y + 1) / 2.0], axis=1) * 255, 'uint8'))
+                image = np.array(np.concatenate([x, pred[i], (y + 1) / 2.0], axis=1) * 255, 'uint8')
+                io.imsave(impath, image)
+                images.append(image)
+            
+            return np.array(images, dtype='uint8')
+        return None
 
     def _save_models(self, g_path: str = None, d_path: str = None):
         if g_path:
@@ -100,6 +110,11 @@ class GAN():
             for name, value in zip(names, metrics):
                 tf.summary.scalar(name, value)
             self.writer.flush()
+    
+    def _write_images(self, epoch: int, images: np.ndarray):
+        with self.writer.as_default():
+            tf.summary.image("Validation data", images, step=epoch, max_outputs=len(images), description="Mask|Generated|Orginal")
+        self.writer.flush()
 
     def _create_dirs(self):
         time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
@@ -120,24 +135,25 @@ class GAN():
     def _discriminator_model(self):
         h = Input(self.input_disc_size, name='mask')
         t = Input(self.input_disc_size, name='image')
-        i = RandomNormal(stddev=1e-2)
+
         inputs = Concatenate()([h, t])
-        x = Conv2D(64, 5, padding='same', kernel_initializer=i)(inputs)
+        x = Conv2D(64, 5, padding='same')(inputs) 
         x = LeakyReLU(0.2)(x)
         x = MaxPool2D((2, 2))(x)
 
         x = Dropout(0.25)(x)
 
-        x = Conv2D(128, 5, padding='same', kernel_initializer=i)(x)
+        # 32x32 @ 3x3 -> 30x30
+        x = Conv2D(128, 3, padding='valid')(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
         x = MaxPool2D((2, 2))(x)
 
-        x = Conv2D(256, 5, kernel_initializer=i)(x)
+        # 15x15 @ 3x3 -> 13x13
+        x = Conv2D(256, 3, padding='valid')(x)
         x = LeakyReLU(0.2)(BatchNormalization()(x))
 
-        x = Conv2D(1, 5, kernel_initializer=i,
-                   padding='same', activation='sigmoid')(x)
-        # x = Dense(1, kernel_initializer=i)(Flatten()(x))
+        # 13x13 @ 3x3 -> 11x11
+        x = Conv2D(1, 3, padding='valid', activation='sigmoid')(x)
         return Model(inputs=[h, t], outputs=x, name='discriminator')
 
     def _generator_model(self):
@@ -147,21 +163,21 @@ class GAN():
 
         encoder = []
         kernels = 3
-        filters, n, m = [16, 32, 64], 64, 16
+        filters, fn, fm = [16, 32, 64], 64, 16
         for f in filters:
             x = Conv2D(f, kernels, padding='same', activation='relu')(x)
             encoder.append(x)
             x = MaxPool2D((2, 2))(x)
 
-        x = x = Conv2D(n, kernels, padding='same', activation='relu')(x)
+        x = Conv2D(fn, kernels, padding='same', activation='relu')(x)
 
         for f in filters[::-1]:
             x = UpSampling2D((2, 2))(x)
             x = Conv2D(f, kernels, padding='same', activation='relu')(x)
             x = Concatenate()([encoder.pop(), x])
-
-        x = GaussianDropout(0.2)(x, training=True)
-        x = Conv2D(m, kernels, padding='same', activation='relu')(x)
+            
+        x = GaussianDropout(0.1)(x, training=True)
+        x = Conv2D(fm, kernels, padding='same', activation='relu')(x)
         outputs = Conv2D(1, 3, padding='same', activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
@@ -208,9 +224,10 @@ class GAN():
                     self._write_log(self.g_log_names, [metrics_g])
                     self._write_log(self.d_log_names, metrics_d)
 
-            self._save_models('model_last.h5', 'model_last.h5')
+            self._save_models(self.g_path_last_name_save, self.d_path_last_name_save)
             if (epoch + 1) % save_per_epochs == 0:
-                self._evaluate(epoch=epoch, data=evaluate_data)
+                images = self._evaluate(epoch=epoch, data=evaluate_data)
+                self._write_images(epoch, images)
                 self._save_models(f'model_{epoch}.h5')
 
     def summary(self):

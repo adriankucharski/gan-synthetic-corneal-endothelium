@@ -16,6 +16,6 @@ if __name__ == '__main__':
     gan = GAN(patch_per_image=500)
     gan.summary()
     train, test  = load_dataset(r'datasets\Alizarine\folds.json')[fold]
-    validation_data = DataIterator(test, 1, patch_per_image=2, inv_values=True).get_dataset()
+    validation_data = DataIterator(test, 1, patch_per_image=1, inv_values=True).get_dataset()
 
     gan.train(100, train, evaluate_data=validation_data, save_per_epochs=1)
