@@ -138,21 +138,20 @@ class GAN():
 
         inputs = Concatenate()([h, t])
         x = Conv2D(64, 5, padding='same')(inputs) 
-        x = LeakyReLU(0.2)(x)
+        x = LeakyReLU(0.3)(x)
         x = MaxPool2D((2, 2))(x)
 
         x = Dropout(0.25)(x)
 
-        # 32x32 @ 3x3 -> 30x30
         x = Conv2D(128, 3, padding='valid')(x)
-        x = LeakyReLU(0.2)(BatchNormalization()(x))
+        x = LeakyReLU(0.3)(BatchNormalization()(x))
         x = MaxPool2D((2, 2))(x)
 
-        # 15x15 @ 3x3 -> 13x13
-        x = Conv2D(256, 3, padding='valid')(x)
-        x = LeakyReLU(0.2)(BatchNormalization()(x))
+        x = Dropout(0.25)(x)
 
-        # 13x13 @ 3x3 -> 11x11
+        x = Conv2D(256, 3, padding='valid')(x)
+        x = LeakyReLU(0.3)(BatchNormalization()(x))
+
         x = Conv2D(1, 3, padding='valid', activation='sigmoid')(x)
         return Model(inputs=[h, t], outputs=x, name='discriminator')
 
@@ -176,7 +175,7 @@ class GAN():
             x = Conv2D(f, kernels, padding='same', activation='relu')(x)
             x = Concatenate()([encoder.pop(), x])
             
-        x = GaussianDropout(0.1)(x, training=True)
+        x = GaussianDropout(0.15)(x, training=True)
         x = Conv2D(fm, kernels, padding='same', activation='relu')(x)
         outputs = Conv2D(1, 3, padding='same', activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
