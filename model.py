@@ -18,9 +18,10 @@ from tensorflow.keras.layers import (Activation, BatchNormalization, GaussianNoi
 from tensorflow.keras.losses import BinaryCrossentropy, Hinge
 from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
 from tqdm import tqdm
 
-from dataset import DataIterator, HexagonDataIterator
+from dataset import DataIterator, HexagonDataGenerator, HexagonDataIterator
 
 np.set_printoptions(suppress=True)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -77,7 +78,7 @@ class GAN():
         self.d_log_names = ['d_loss', 'd_acc']
         self.g_log_names = ['g_loss']
 
-    def _evaluate(self, epoch: int, data: Tuple[np.ndarray, np.ndarray]=None) -> Union[None, Tuple[np.ndarray]]:
+    def _evaluate(self, epoch: int, data: Tuple[np.ndarray, np.ndarray] = None) -> Union[None, Tuple[np.ndarray]]:
         if data is not None:
             images = []
             path = os.path.join(self.evaluate_path_save, str(epoch))
@@ -90,10 +91,10 @@ class GAN():
             for i in range(len(xdata)):
                 x, y = xdata[i], ydata[i]
                 impath = os.path.join(path, f'org_{i}.png')
-                image = np.array(np.concatenate([x, pred[i], (y + 1) / 2.0], axis=1) * 255, 'uint8')
+                image = np.array(np.concatenate(
+                    [x, pred[i], (y + 1) / 2.0], axis=1) * 255, 'uint8')
                 io.imsave(impath, image)
                 images.append(image)
-            
             return np.array(images, dtype='uint8')
         return None
 
@@ -110,10 +111,11 @@ class GAN():
             for name, value in zip(names, metrics):
                 tf.summary.scalar(name, value)
             self.writer.flush()
-    
+
     def _write_images(self, epoch: int, images: np.ndarray):
         with self.writer.as_default():
-            tf.summary.image("Validation data", images, step=epoch, max_outputs=len(images), description="Mask|Generated|Orginal")
+            tf.summary.image("Validation data", images, step=epoch, max_outputs=len(
+                images), description="Mask|Generated|Orginal")
         self.writer.flush()
 
     def _create_dirs(self):
@@ -137,7 +139,7 @@ class GAN():
         t = Input(self.input_disc_size, name='image')
 
         inputs = Concatenate()([h, t])
-        x = Conv2D(64, 5, padding='same')(inputs) 
+        x = Conv2D(64, 5, padding='same')(inputs)
         x = LeakyReLU(0.3)(x)
         x = MaxPool2D((2, 2))(x)
 
@@ -174,10 +176,11 @@ class GAN():
             x = UpSampling2D((2, 2))(x)
             x = Conv2D(f, kernels, padding='same', activation='relu')(x)
             x = Concatenate()([encoder.pop(), x])
-            
+
         x = GaussianDropout(0.15)(x, training=True)
         x = Conv2D(fm, kernels, padding='same', activation='relu')(x)
-        outputs = Conv2D(1, 3, padding='same', activation='tanh', name='output')(x)
+        outputs = Conv2D(1, 3, padding='same',
+                         activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
     def train(self, epochs: int, dataset: Tuple[np.ndarray], evaluate_data: Tuple[np.ndarray] = None, batch_size=128, save_per_epochs=5, log_per_steps=5):
@@ -223,7 +226,8 @@ class GAN():
                     self._write_log(self.g_log_names, [metrics_g])
                     self._write_log(self.d_log_names, metrics_d)
 
-            self._save_models(self.g_path_last_name_save, self.d_path_last_name_save)
+            self._save_models(self.g_path_last_name_save,
+                              self.d_path_last_name_save)
             if (epoch + 1) % save_per_epochs == 0:
                 images = self._evaluate(epoch=epoch, data=evaluate_data)
                 self._write_images(epoch, images)
@@ -233,3 +237,96 @@ class GAN():
         self.d_model.summary()
         self.g_model.summary()
         self.gan.summary()
+
+
+class SegmentationUnet():
+    def __init__(self,
+                 patch_size=64,
+                 log_path_save='logs/unet',
+                 model_path_save='segmentation/models',
+                 learning_rate=1e-4,
+                 ):
+        self.input_size = (patch_size, patch_size, 1)
+
+        self.log_path = log_path_save
+        self.model_path_save = model_path_save
+
+        self.model = self._unet_model()
+        self.model.compile(
+            optimizer=Adam(learning_rate=learning_rate),
+            loss=BinaryCrossentropy()
+        )
+        self._create_dirs_and_callbacks()
+
+    def _create_dirs_and_callbacks(self):
+        time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+        self.log_path = os.path.join(self.log_path, time)
+        self.model_path_save = os.path.join(self.model_path_save, time)
+        for path in [self.log_path, self.model_path_save]:
+            Path(path).mkdir(parents=True, exist_ok=True)
+ 
+        self.writer = tf.summary.create_file_writer(os.path.join(self.log_path, 'images'))
+        self.model_save = ModelCheckpoint(
+            os.path.join(self.model_path_save, 'model.hdf5'), save_best_only=True)
+        self.tensorboard_log_callback = TensorBoard(
+            log_dir=self.log_path, write_images=True)
+        self.tensorboard_image_callback = LambdaCallback(
+            on_epoch_end=self._evaluate)
+       
+
+    def _evaluate(self, epoch: int, logs):
+        if self.evaluate_data is not None:
+            tf.summary.experimental.set_step(epoch)
+            mask, image = self.evaluate_data
+            predicted = self.model.predict_on_batch(image)
+            images = np.concatenate([image, predicted, mask], axis=2)
+            with self.writer.as_default():
+                tf.summary.image("Validation data", images, step=epoch, max_outputs=len(
+                    images), description="Image|Mask")
+            self.writer.flush()
+
+    def _unet_model(self) -> Model:
+        def ConvUNetBlock(filters=32, dropout=0.2, ki = 'he_normal', act = 'relu'):
+            return Sequential([
+                Conv2D(filters, (3, 3), kernel_initializer=ki, activation=act, padding='same'),
+                Conv2D(filters, (3, 3), kernel_initializer=ki, activation=act, padding='same'),
+                Dropout(dropout)
+            ])
+
+        X = x = Input(self.input_size, name='image')
+        encoder = []
+        filters, fn, fm = [32, 64, 128], 128, 32
+        for f in filters:
+            x = ConvUNetBlock(f, act='relu', dropout=0.20)(x)
+            encoder.append(x)
+            x = MaxPool2D((2, 2))(x)
+
+        x = ConvUNetBlock(fn, act='relu', dropout=0.20)(x)
+
+        for f in filters[::-1]:
+            x = UpSampling2D((2, 2))(x)
+            x = ConvUNetBlock(f, act='relu', dropout=0.20)(x)
+            x = Concatenate()([encoder.pop(), x])
+
+        x = ConvUNetBlock(fm, act='relu', dropout=0.20)(x)
+        outputs = Conv2D(1, 3, padding='same',
+                         activation='sigmoid', name='output')(x)
+        return Model(inputs=X, outputs=outputs, name='unet')
+
+    def train(self, epochs: int, dataset: Tuple[np.ndarray, np.ndarray], evaluate_data: np.ndarray = None, batch_size: int = 128, validation_split: float = 0):
+        self.evaluate_data = evaluate_data
+        x, y = dataset
+        self.model.fit(
+            x=x,
+            y=y,
+            validation_split=validation_split,
+            batch_size=batch_size,
+            epochs=epochs,
+            callbacks=[self.tensorboard_log_callback,
+                       self.tensorboard_image_callback,
+                       self.model_save],
+            verbose=1
+        )
+
+    def summary(self):
+        self.model.summary()

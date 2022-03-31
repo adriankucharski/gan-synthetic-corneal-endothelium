@@ -17,7 +17,7 @@ from tensorflow.keras.models import load_model, Model
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
+def load_dataset(json_path: str, normalize=True) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
     """
         Returns dataset in format Tuple[Tuple[train: np.ndarray, test: np.ndarray]]
         train | test: np.ndarray[A, B, height, width, 1]
@@ -32,8 +32,13 @@ def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
         roi_path = os.path.join(folds_json['dataset_path'], folds_json['roi'])
 
         def load_images(path: str) -> np.ndarray:
-            image = (io.imread(os.path.join(images_path, path), as_gray=True)[
-                np.newaxis, ..., np.newaxis] - 127.5) / 127.5
+            image = None
+            if normalize:
+                image = (io.imread(os.path.join(images_path, path), as_gray=True)[
+                    np.newaxis, ..., np.newaxis] - 127.5) / 127.5
+            else:
+                image = io.imread(os.path.join(images_path, path), as_gray=True)[
+                    np.newaxis, ..., np.newaxis] / 255.0
             gt = io.imread(os.path.join(gt_path, path), as_gray=True)[
                 np.newaxis, ..., np.newaxis] / 255.0
             roi = io.imread(os.path.join(roi_path, path), as_gray=True)[
@@ -53,9 +58,10 @@ def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
-    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64, 64, 1), hexagon_size=(17, 21), neatness_range=(0.55, 0.70), normalize=False, inv_values = True):
+    def __init__(self, batch_size=32, patch_size=64, total_patches=32 * 24 * 30, noise_size=(64, 64, 1), hexagon_size=(17, 21), neatness_range=(0.55, 0.70), normalize=False, inv_values = True):
         """Initialization
         Dataset is (x, y, roi)"""
+        assert total_patches % batch_size == 0
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.total_patches = total_patches
@@ -112,14 +118,14 @@ class DataIterator(tf.keras.utils.Sequence):
 
     def __len__(self) -> int:
         'Denotes the number of batches per epoch'
-        return len(self.x) // self.batch_size
+        return len(self.mask) // self.batch_size
 
     def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
         'Generate one batch of data and returns y, x (mask, image)'
         # Generate indexes of the batch
         idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
-        x = self.x[idx]
-        y = self.y[idx]
+        x = self.mask[idx]
+        y = self.image[idx]
         return y, x  # mask, image
 
     def _get_constrain_roi(self, roi: np.ndarray) -> Tuple[int, int, int, int]:
@@ -132,7 +138,7 @@ class DataIterator(tf.keras.utils.Sequence):
 
     def on_epoch_end(self):
         'Generate new patches after one epoch'
-        self.x, self.y = [], []
+        self.mask, self.image = [], []
         mid = self.patch_size // 2
         for x, y, roi in self.dataset:
             ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
@@ -142,18 +148,18 @@ class DataIterator(tf.keras.utils.Sequence):
                 ymin + mid, ymax - mid, self.patch_per_image)
 
             for xpos, ypos in zip(xrand, yrand):
-                self.x.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
-                self.y.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                self.mask.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                self.image.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
 
-        self.x, self.y = np.array(self.x), np.array(self.y)
+        self.mask, self.image = np.array(self.mask), np.array(self.image)
         if self.inv_values:
-            self.y = 1 - self.y
+            self.image = 1 - self.image
 
         if self.normalize:
-            self.x, self.y = (self.x + 1) / 2, (self.y + 1) / 2
+            self.mask, self.image = (self.mask + 1) / 2, (self.image + 1) / 2
 
     def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
-        return self.y, self.x
+        return self.image, self.mask
 
 
 class HexagonDataGenerator():
