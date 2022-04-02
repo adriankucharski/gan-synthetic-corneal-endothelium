@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.models import Model, load_model
 from util import add_salt_and_pepper, normalization
 from typing import Tuple, Union
-
+from skimage import exposure
 
 def generate_dataset(generator_path: str, num_of_data: int,
                      batch_size=32,
@@ -17,15 +17,19 @@ def generate_dataset(generator_path: str, num_of_data: int,
                      noise_size=(64, 64, 1),
                      hexagon_size=(17, 21),
                      neatness_range=(0.55, 0.7),
-                     normalize=False,
-                     inv_values=True
+                     inv_values=True,
+                     sap_ratio = (0.0, 0.2),
+                     sap_value_range = (0.5, 1.0),
+                     result_gamma_range = (0.25, 1.75),
+                     normal_noise = (0, 1e-3),
+                     keep_edges: float = 1.0,
+                     edges_thickness: int = 1
                      ) -> Tuple[np.ndarray, np.ndarray]:
     model_generator: Model = load_model(generator_path)
     hex_it = HexagonDataIterator(
         batch_size=batch_size,
         patch_size=patch_size,
         noise_size=noise_size,
-        normalize=normalize,
         inv_values=inv_values,
         total_patches=num_of_data,
         hexagon_size=hexagon_size,
@@ -34,16 +38,33 @@ def generate_dataset(generator_path: str, num_of_data: int,
 
     mask, image = [], []
     for h, z in hex_it:
-        # (32, 64, 64, 1)
-        # (32, 64, 64, 1)
-        p = model_generator.predict_on_batch([h, z])
+        salty_h = h
+        if sap_ratio is not None:
+            salty_h = np.array(h)
+            for i in range(len(salty_h)):
+                ratio = np.random.uniform(*sap_ratio)
+                value = np.random.uniform(*sap_value_range)
+                keepe = np.random.choice([True, False], p=[keep_edges, 1 - keep_edges])
+                salty_h[i] = add_salt_and_pepper(salty_h[i], ratio, value, keepe)
+        p = model_generator.predict_on_batch([salty_h, z])
+        if edges_thickness > 1:
+            for i in range(len(h)):
+                func = morphology.erosion if inv_values else morphology.dilation
+                h[i] = func(h[i, ..., 0], morphology.square(edges_thickness))[..., np.newaxis]
         mask.extend(h)
         image.extend(p)
     mask, image = np.array(mask), np.array(image)
     image = (image + 1) / 2
+    if result_gamma_range is not None:
+        for i in range(len(image)):
+            rgamma = np.random.uniform(*result_gamma_range)
+            image[i] = exposure.adjust_gamma(image[i], rgamma)
+    if normal_noise is not None:
+        r = np.random.normal(*normal_noise, size=image.shape)
+        image = image + r
     if inv_values:
         mask = 1 - mask
-    return image, mask
+    return np.clip(image, 0, 1), mask
 
 class UnetPrediction():
     def __init__(self, model_path: str, patch_size: int = 64, stride:int = 4, batch_size: int = 64):
@@ -101,21 +122,21 @@ class UnetPrediction():
             img = tmp
         return img
 
-    def _predict_from_array(self, data: Tuple[np.ndarray]) -> Tuple[np.ndarray]:
+    def _predict_from_array(self, data: Tuple[np.ndarray], verbose=0) -> Tuple[np.ndarray]:
         predicted = []
         for idx in range(len(data)):
             height, width = data[idx].shape[:2]
             img = self._add_outline(data[idx])
             new_height, new_width = img.shape[:2]
             patches = self._get_patches(img)
-            predictions = self.model.predict(patches, batch_size=self.batch_size, verbose=1)
+            predictions = self.model.predict(patches, batch_size=self.batch_size, verbose=verbose)
             pred_img = self._build_img_from_patches(predictions, new_height, new_width)
 
             pred_img = pred_img[:height, :width]
             predicted.append(pred_img)
         return predicted
 
-    def _predict_from_path(self, path: Union[str, Tuple[str]]) -> Tuple[np.ndarray]:
+    def _predict_from_path(self, path: Union[str, Tuple[str]], verbose=0) -> Tuple[np.ndarray]:
         images = []
 
         if isinstance(path, (list, tuple)):
@@ -131,24 +152,37 @@ class UnetPrediction():
                 images[i] = images[i][..., np.newaxis]
                 if images[i].max() > 1.0:
                     images[i] = images[i] / 255.0
-        return self._predict_from_array(images)
+        return self._predict_from_array(images, verbose)
 
-    def predict(self, data: Union[np.ndarray, Tuple[np.ndarray], str]) -> Tuple[np.ndarray]:
+    def predict(self, data: Union[np.ndarray, Tuple[np.ndarray], str], verbose=0) -> Tuple[np.ndarray]:
         if isinstance(data, str):
-            return self._predict_from_path(data)
+            return self._predict_from_path(data, verbose)
         if isinstance(data, np.ndarray):
-            return self._predict_from_array([data])
+            if len(data.shape) == 4:
+                return self._predict_from_array(data, verbose)
+            elif len(data.shape) == 3:
+                return self._predict_from_array([data], verbose)
         if isinstance(data, (list, tuple)) and len(data) > 0:
             if isinstance(data[0], str):
-                return self._predict_from_path(data) 
+                return self._predict_from_path(data, verbose) 
             if isinstance(data[0], np.ndarray):
-                return self._predict_from_array(data)
+                return self._predict_from_array(data, verbose)
             
 
 if __name__ == '__main__':
-    unet_pred = UnetPrediction(r'segmentation\models\20220401-0004\model.hdf5',  stride = 16, batch_size = 128)
-    pred = unet_pred.predict(r'datasets\Alizarine\images\5.png')
-    for im in pred:
-        plt.imshow(im, 'gray')
-        plt.show()
-    
+    preds = []
+    names = []
+    image_path = r'datasets\Gavet\images\1G.png'
+    for model_path in glob('segmentation/models/*'):
+        name = Path(model_path).name
+        model_path = os.path.join(model_path, 'model.hdf5')
+        unet_pred = UnetPrediction(model_path,  stride = 8, batch_size = 128)
+        pred = unet_pred.predict(image_path)[0]
+        preds.append(pred)
+        names.append(name)
+
+    print(names)
+    p = np.concatenate(preds, axis=1)
+    plt.imshow(p, 'gray')
+    plt.axis('off')
+    plt.show()

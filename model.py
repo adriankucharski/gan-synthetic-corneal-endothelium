@@ -245,9 +245,11 @@ class SegmentationUnet():
                  log_path_save='logs/unet',
                  model_path_save='segmentation/models',
                  learning_rate=1e-4,
+                 logs_images_limit = 3
                  ):
         self.input_size = (patch_size, patch_size, 1)
 
+        self.logs_images_limit = logs_images_limit
         self.log_path = log_path_save
         self.model_path_save = model_path_save
 
@@ -281,8 +283,10 @@ class SegmentationUnet():
             predicted = self.model.predict_on_batch(image)
             images = np.concatenate([image, predicted, mask], axis=2)
             with self.writer.as_default():
-                tf.summary.image("Validation data", images, step=epoch, max_outputs=len(
-                    images), description="Image|Mask")
+                mx_output = len(images)
+                if self.logs_images_limit is not None:
+                    mx_output = self.logs_images_limit
+                tf.summary.image("Validation data", images, step=epoch, max_outputs=mx_output, description="Image|Mask")
             self.writer.flush()
 
     def _unet_model(self) -> Model:

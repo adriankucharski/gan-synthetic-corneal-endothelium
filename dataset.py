@@ -17,8 +17,11 @@ from tensorflow.keras.models import load_model, Model
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-def load_dataset(json_path: str, normalize=True) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
+def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
     """
+        json_path - path with json that describe dataset
+        normalize - if true images have value [-1, 1] else [0, 1]
+        swapaxes - if true [num_of_images, 3, h, w, 1] else [3, num_of_images, h, w, 1]
         Returns dataset in format Tuple[Tuple[train: np.ndarray, test: np.ndarray]]
         train | test: np.ndarray[A, B, height, width, 1]
         Where A is number of images in a fold, B is 3 - [image, gt, roi]
@@ -54,6 +57,10 @@ def load_dataset(json_path: str, normalize=True) -> Tuple[Tuple[np.ndarray, np.n
                 dataset_fold_train.append(load_images(train_name))
             dataset.append((np.array(dataset_fold_train),
                            np.array(dataset_fold_test)))
+    if swapaxes:
+        for i in range(len(dataset)):
+            a, b = dataset[i]
+            dataset[i] = (a.swapaxes(0, 1), b.swapaxes(0, 1))
     return dataset
 
 
@@ -118,14 +125,14 @@ class DataIterator(tf.keras.utils.Sequence):
 
     def __len__(self) -> int:
         'Denotes the number of batches per epoch'
-        return len(self.mask) // self.batch_size
+        return len(self.image) // self.batch_size
 
     def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
         'Generate one batch of data and returns y, x (mask, image)'
         # Generate indexes of the batch
         idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
-        x = self.mask[idx]
-        y = self.image[idx]
+        x = self.image[idx]
+        y = self.mask[idx]
         return y, x  # mask, image
 
     def _get_constrain_roi(self, roi: np.ndarray) -> Tuple[int, int, int, int]:
@@ -138,7 +145,7 @@ class DataIterator(tf.keras.utils.Sequence):
 
     def on_epoch_end(self):
         'Generate new patches after one epoch'
-        self.mask, self.image = [], []
+        self.image, self.mask = [], []
         mid = self.patch_size // 2
         for x, y, roi in self.dataset:
             ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
@@ -148,18 +155,19 @@ class DataIterator(tf.keras.utils.Sequence):
                 ymin + mid, ymax - mid, self.patch_per_image)
 
             for xpos, ypos in zip(xrand, yrand):
-                self.mask.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
-                self.image.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                self.image.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                self.mask.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
 
-        self.mask, self.image = np.array(self.mask), np.array(self.image)
+        self.image, self.mask = np.array(self.image), np.array(self.mask)
         if self.inv_values:
-            self.image = 1 - self.image
+            self.mask = 1 - self.mask
 
         if self.normalize:
-            self.mask, self.image = (self.mask + 1) / 2, (self.image + 1) / 2
+            self.image, self.mask = (self.image + 1) / 2, (self.mask + 1) / 2
 
     def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
-        return self.image, self.mask
+        'self.image, self.mask'
+        return self.mask, self.image
 
 
 class HexagonDataGenerator():
