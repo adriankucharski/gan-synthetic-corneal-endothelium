@@ -11,6 +11,7 @@ from util import add_salt_and_pepper, normalization
 from typing import Tuple, Union
 from skimage import exposure
 
+
 def generate_dataset(generator_path: str, num_of_data: int,
                      batch_size=32,
                      patch_size=64,
@@ -18,12 +19,15 @@ def generate_dataset(generator_path: str, num_of_data: int,
                      hexagon_size=(17, 21),
                      neatness_range=(0.55, 0.7),
                      inv_values=True,
-                     sap_ratio = (0.0, 0.2),
-                     sap_value_range = (0.5, 1.0),
-                     result_gamma_range = (0.25, 1.75),
-                     normal_noise = (0, 1e-3),
+                     sap_ratio=(0.0, 0.2),
+                     sap_value_range=(0.5, 1.0),
+                     result_gamma_range=(0.25, 1.75),
+                     noise_range=(-1e-3, 1e-3),
                      keep_edges: float = 1.0,
-                     edges_thickness: int = 1
+                     edges_thickness: int = 1,
+                     remove_edges_ratio: float = 0,
+                     rotate90=True,
+                     rotation_range=(0, 0)
                      ) -> Tuple[np.ndarray, np.ndarray]:
     model_generator: Model = load_model(generator_path)
     hex_it = HexagonDataIterator(
@@ -33,7 +37,9 @@ def generate_dataset(generator_path: str, num_of_data: int,
         inv_values=inv_values,
         total_patches=num_of_data,
         hexagon_size=hexagon_size,
-        neatness_range=neatness_range
+        neatness_range=neatness_range,
+        remove_edges_ratio=remove_edges_ratio,
+        rotation_range=rotation_range
     )
 
     mask, image = [], []
@@ -44,13 +50,16 @@ def generate_dataset(generator_path: str, num_of_data: int,
             for i in range(len(salty_h)):
                 ratio = np.random.uniform(*sap_ratio)
                 value = np.random.uniform(*sap_value_range)
-                keepe = np.random.choice([True, False], p=[keep_edges, 1 - keep_edges])
-                salty_h[i] = add_salt_and_pepper(salty_h[i], ratio, value, keepe)
+                keepe = np.random.choice(
+                    [True, False], p=[keep_edges, 1 - keep_edges])
+                salty_h[i] = add_salt_and_pepper(
+                    salty_h[i], ratio, value, keepe)
         p = model_generator.predict_on_batch([salty_h, z])
         if edges_thickness > 1:
             for i in range(len(h)):
                 func = morphology.erosion if inv_values else morphology.dilation
-                h[i] = func(h[i, ..., 0], morphology.square(edges_thickness))[..., np.newaxis]
+                h[i] = func(h[i, ..., 0], morphology.square(
+                    edges_thickness))[..., np.newaxis]
         mask.extend(h)
         image.extend(p)
     mask, image = np.array(mask), np.array(image)
@@ -59,21 +68,26 @@ def generate_dataset(generator_path: str, num_of_data: int,
         for i in range(len(image)):
             rgamma = np.random.uniform(*result_gamma_range)
             image[i] = exposure.adjust_gamma(image[i], rgamma)
-    if normal_noise is not None:
-        r = np.random.normal(*normal_noise, size=image.shape)
+    if noise_range is not None:
+        r = np.random.uniform(*noise_range, size=image.shape)
         image = image + r
     if inv_values:
         mask = 1 - mask
+    if rotate90:
+        for i in range(len(image)):
+            k = np.random.randint(0, 4)
+            image[i], mask[i] = np.rot90(image[i], k=k), np.rot90(mask[i], k=k)
     return np.clip(image, 0, 1), mask
 
+
 class UnetPrediction():
-    def __init__(self, model_path: str, patch_size: int = 64, stride:int = 4, batch_size: int = 64):
+    def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64):
         self.model: Model = load_model(model_path)
         self.patch_size = patch_size
         self.stride = stride
         self.batch_size = batch_size
-    
-    def _build_img_from_patches(self, preds: np.ndarray, img_h:int, img_w:int) -> np.ndarray:
+
+    def _build_img_from_patches(self, preds: np.ndarray, img_h: int, img_w: int) -> np.ndarray:
         patch_h, patch_w = preds.shape[1:3]
 
         H = (img_h-patch_h)//self.stride+1
@@ -85,9 +99,9 @@ class UnetPrediction():
         for h in range(H):
             for w in range(W):
                 prob[h*self.stride:(h*self.stride)+patch_h, w *
-                    self.stride:(w*self.stride)+patch_w, :] += preds[k]
+                     self.stride:(w*self.stride)+patch_w, :] += preds[k]
                 _sum[h*self.stride:(h*self.stride)+patch_h, w *
-                    self.stride:(w*self.stride)+patch_w, :] += 1
+                     self.stride:(w*self.stride)+patch_w, :] += 1
                 k += 1
         final_avg = prob/_sum
         return final_avg
@@ -103,7 +117,7 @@ class UnetPrediction():
         for h in range(H):
             for w in range(W):
                 patches[iter_tot] = (img[h*self.stride:(h*self.stride)+self.patch_size,
-                                        w*self.stride:(w*self.stride)+self.patch_size, :])
+                                         w*self.stride:(w*self.stride)+self.patch_size, :])
                 iter_tot += 1
         return patches
 
@@ -129,8 +143,10 @@ class UnetPrediction():
             img = self._add_outline(data[idx])
             new_height, new_width = img.shape[:2]
             patches = self._get_patches(img)
-            predictions = self.model.predict(patches, batch_size=self.batch_size, verbose=verbose)
-            pred_img = self._build_img_from_patches(predictions, new_height, new_width)
+            predictions = self.model.predict(
+                patches, batch_size=self.batch_size, verbose=verbose)
+            pred_img = self._build_img_from_patches(
+                predictions, new_height, new_width)
 
             pred_img = pred_img[:height, :width]
             predicted.append(pred_img)
@@ -164,22 +180,23 @@ class UnetPrediction():
                 return self._predict_from_array([data], verbose)
         if isinstance(data, (list, tuple)) and len(data) > 0:
             if isinstance(data[0], str):
-                return self._predict_from_path(data, verbose) 
+                return self._predict_from_path(data, verbose)
             if isinstance(data[0], np.ndarray):
                 return self._predict_from_array(data, verbose)
-            
+
 
 if __name__ == '__main__':
     preds = []
     names = []
-    image_path = r'datasets\Gavet\images\1G.png'
+    image_path = r'D:\Deep Learning\New arch\datasets\Gavet\images\24G.png'
     for model_path in glob('segmentation/models/*'):
         name = Path(model_path).name
-        model_path = os.path.join(model_path, 'model.hdf5')
-        unet_pred = UnetPrediction(model_path,  stride = 8, batch_size = 128)
-        pred = unet_pred.predict(image_path)[0]
-        preds.append(pred)
-        names.append(name)
+        if any([s in name for s in ['2346', '2045', '0025']]):
+            model_path = os.path.join(model_path, 'model-05.hdf5')
+            unet_pred = UnetPrediction(model_path,  stride=8, batch_size=128)
+            pred = unet_pred.predict(image_path)[0]
+            preds.append(pred)
+            names.append(name)
 
     print(names)
     p = np.concatenate(preds, axis=1)

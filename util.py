@@ -15,7 +15,16 @@ import scipy.ndimage
 from matplotlib import pyplot as plt
 from skimage import io, morphology
 from skimage.filters import threshold_sauvola
+import datetime
+from pathlib import Path
+import json
 
+def dumb_params(params: dict, spath: str='segmentation/params'):
+    time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+    sargpath = os.path.join(spath, f'{time}.json')
+    Path(spath).mkdir(parents=True, exist_ok=True)
+    with open(sargpath, 'w') as file:
+        file.write(json.dumps(params))
 
 def time_measure(routine: Callable) -> timedelta:
     start = timer()
@@ -107,7 +116,7 @@ def remove_small(im: np.ndarray) -> np.ndarray:
     im = labeled == max_idx
     return im 
 
-def postprocess_sauvola(im: np.ndarray, roi: np.ndarray, size=5, dilation_square_size=0) -> np.ndarray:
+def postprocess_sauvola(im: np.ndarray, roi: np.ndarray, size=5, dilation_square_size=0, pruning_op=False) -> np.ndarray:
     if len(im.shape) == 3:
         im = im[..., 0]
     if len(roi.shape) == 3:
@@ -118,7 +127,8 @@ def postprocess_sauvola(im: np.ndarray, roi: np.ndarray, size=5, dilation_square
     im[roi_dil == False] = 0
     im = morphology.skeletonize(im)
     im = remove_small(im)
-    im = pruning(im)
+    if pruning_op:
+        im = pruning(im)
     if dilation_square_size is not None and dilation_square_size > 0:
         im = morphology.dilation(im, morphology.square(dilation_square_size))
     return im.reshape((*im.shape[:2], 1))

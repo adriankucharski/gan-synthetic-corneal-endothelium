@@ -183,7 +183,22 @@ class GAN():
                          activation='tanh', name='output')(x)
         return Model(inputs=[H, Z], outputs=outputs, name='generator')
 
-    def train(self, epochs: int, dataset: Tuple[np.ndarray], evaluate_data: Tuple[np.ndarray] = None, batch_size=128, save_per_epochs=5, log_per_steps=5):
+    def train(self,
+              epochs: int,
+              dataset: Tuple[np.ndarray],
+              evaluate_data: Tuple[np.ndarray] = None,
+              batch_size=128,
+              save_per_epochs=5,
+              log_per_steps=5,
+              hexagon_params={
+                  'hexagon_size': (17, 21),
+                  'neatness_range': (0.6, 0.75),
+                  'normalize': False,
+                  'inv_values': True,
+                  'remove_edges_ratio': 0.1,
+                  'rotation_range': (0, 0),
+                  'random_shift': 8,
+              }):
         # Prepare label arrays for D and GAN training
         real_labels = tf.ones(
             (batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
@@ -195,8 +210,7 @@ class GAN():
             # Init iterator
             data_it = DataIterator(
                 dataset, batch_size, self.patch_size, self.patch_per_image, inv_values=True)
-            data_hz = HexagonDataIterator(
-                batch_size, self.patch_size, self.patch_per_image * len(dataset), self.noise_size, inv_values=True)
+            data_hz = HexagonDataIterator(batch_size, self.patch_size, self.patch_per_image * len(dataset), self.noise_size, **hexagon_params)
             steps = len(data_it)
             assert steps > log_per_steps
 
@@ -245,7 +259,7 @@ class SegmentationUnet():
                  log_path_save='logs/unet',
                  model_path_save='segmentation/models',
                  learning_rate=1e-4,
-                 logs_images_limit = 3
+                 logs_images_limit=3
                  ):
         self.input_size = (patch_size, patch_size, 1)
 
@@ -266,15 +280,15 @@ class SegmentationUnet():
         self.model_path_save = os.path.join(self.model_path_save, time)
         for path in [self.log_path, self.model_path_save]:
             Path(path).mkdir(parents=True, exist_ok=True)
- 
-        self.writer = tf.summary.create_file_writer(os.path.join(self.log_path, 'images'))
+
+        self.writer = tf.summary.create_file_writer(
+            os.path.join(self.log_path, 'images'))
         self.model_save = ModelCheckpoint(
-            os.path.join(self.model_path_save, 'model.hdf5'), save_best_only=True)
+            os.path.join(self.model_path_save, 'model-{epoch:02d}.hdf5'), save_best_only=False, period=1)
         self.tensorboard_log_callback = TensorBoard(
             log_dir=self.log_path, write_images=True)
         self.tensorboard_image_callback = LambdaCallback(
             on_epoch_end=self._evaluate)
-       
 
     def _evaluate(self, epoch: int, logs):
         if self.evaluate_data is not None:
@@ -286,14 +300,17 @@ class SegmentationUnet():
                 mx_output = len(images)
                 if self.logs_images_limit is not None:
                     mx_output = self.logs_images_limit
-                tf.summary.image("Validation data", images, step=epoch, max_outputs=mx_output, description="Image|Mask")
+                tf.summary.image("Validation data", images, step=epoch,
+                                 max_outputs=mx_output, description="Image|Mask")
             self.writer.flush()
 
     def _unet_model(self) -> Model:
-        def ConvUNetBlock(filters=32, dropout=0.2, ki = 'he_normal', act = 'relu'):
+        def ConvUNetBlock(filters=32, dropout=0.2, ki='he_normal', act='relu'):
             return Sequential([
-                Conv2D(filters, (3, 3), kernel_initializer=ki, activation=act, padding='same'),
-                Conv2D(filters, (3, 3), kernel_initializer=ki, activation=act, padding='same'),
+                Conv2D(filters, (3, 3), kernel_initializer=ki,
+                       padding='same', activation=act),
+                Conv2D(filters, (3, 3), kernel_initializer=ki,
+                       padding='same', activation=act),
                 Dropout(dropout)
             ])
 

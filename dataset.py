@@ -13,6 +13,7 @@ import tensorflow as tf
 from hexgrid import generate_hexagons, grid_create_hexagons
 from util import add_salt_and_pepper, normalization, time_measure
 import json
+import cv2
 from tensorflow.keras.models import load_model, Model
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -34,7 +35,7 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
             folds_json['dataset_path'], folds_json['images'])
         roi_path = os.path.join(folds_json['dataset_path'], folds_json['roi'])
 
-        def load_images(path: str) -> np.ndarray:
+        def load_images(path: str, w: int = None, h: int = None) -> np.ndarray:
             image = None
             if normalize:
                 image = (io.imread(os.path.join(images_path, path), as_gray=True)[
@@ -46,15 +47,28 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
                 np.newaxis, ..., np.newaxis] / 255.0
             roi = io.imread(os.path.join(roi_path, path), as_gray=True)[
                 np.newaxis, ..., np.newaxis] / 255.0
+
+            if w is not None and h is not None:
+                w, h = int(w), int(h)
+                image = cv2.resize(image[0], (w, h))[
+                    np.newaxis, ..., np.newaxis]
+                gt = cv2.resize(gt[0], (w, h))[np.newaxis, ..., np.newaxis]
+                roi = cv2.resize(roi[0], (w, h))[np.newaxis, ..., np.newaxis]
             return np.concatenate([image, gt, roi], axis=0)
+
+        w, h = None, None
+        try:
+            w, h = folds_json['width'], folds_json['height']
+        except:
+            pass
 
         for fold in folds_json['folds']:
             dataset_fold_test = []
             dataset_fold_train = []
             for test_name in fold['test']:
-                dataset_fold_test.append(load_images(test_name))
+                dataset_fold_test.append(load_images(test_name, w, h))
             for train_name in fold['train']:
-                dataset_fold_train.append(load_images(train_name))
+                dataset_fold_train.append(load_images(train_name, w, h))
             dataset.append((np.array(dataset_fold_train),
                            np.array(dataset_fold_test)))
     if swapaxes:
@@ -65,7 +79,19 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
-    def __init__(self, batch_size=32, patch_size=64, total_patches=32 * 24 * 30, noise_size=(64, 64, 1), hexagon_size=(17, 21), neatness_range=(0.55, 0.70), normalize=False, inv_values = True):
+    def __init__(self, 
+                 batch_size=32, 
+                 patch_size=64, 
+                 total_patches=32 * 24 * 30, 
+                 noise_size=(64, 64, 1), 
+                 hexagon_size=(17, 21), 
+                 neatness_range=(0.55, 0.70), 
+                 normalize=False, 
+                 inv_values=True, 
+                 remove_edges_ratio=0.1,
+                 rotation_range=(0, 0),
+                 random_shift = 8
+                 ):
         """Initialization
         Dataset is (x, y, roi)"""
         assert total_patches % batch_size == 0
@@ -77,6 +103,9 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         self.neatness_range = neatness_range
         self.normalize = normalize
         self.inv_values = inv_values
+        self.remove_edges_ratio = remove_edges_ratio
+        self.rotation_range = rotation_range
+        self.random_shift = random_shift
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -95,20 +124,24 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         'Generate new hexagons after one epoch'
         neatness = np.random.uniform(*self.neatness_range)
         self.h = generate_hexagons(self.total_patches,
-                                   self.hexagon_size, neatness, random_shift=8)
+                                   self.hexagon_size, 
+                                   neatness, 
+                                   random_shift=self.random_shift, 
+                                   remove_edges_ratio=self.remove_edges_ratio,
+                                   rotation_range=self.rotation_range)
         self.z = np.random.normal(0, 1, (self.total_patches, *self.noise_size))
 
         if self.inv_values:
             self.h = 1 - self.h
-            
-        if self.normalize: 
+
+        if self.normalize:
             self.h = (self.h + 1) / 2
 
 
 class DataIterator(tf.keras.utils.Sequence):
     'Generates data for Keras'
 
-    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, normalize=False, inv_values = True):
+    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, normalize=False, inv_values=True):
         """
         Initialization
         Dataset is (x, y, roi)
@@ -166,7 +199,7 @@ class DataIterator(tf.keras.utils.Sequence):
             self.image, self.mask = (self.image + 1) / 2, (self.mask + 1) / 2
 
     def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
-        'self.image, self.mask'
+        'self.mask, self.image'
         return self.mask, self.image
 
 
