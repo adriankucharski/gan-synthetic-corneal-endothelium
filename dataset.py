@@ -4,7 +4,7 @@ Dataset
 @author: Adrian Kucharski
 """
 from typing import Tuple
-from matplotlib import pyplot as plt
+from matplotlib import markers, pyplot as plt
 
 import numpy as np
 from skimage import io, transform, morphology
@@ -13,15 +13,19 @@ import tensorflow as tf
 from hexgrid import generate_hexagons, grid_create_hexagons
 from util import add_salt_and_pepper, normalization, time_measure
 import json
+import cv2
 from tensorflow.keras.models import load_model, Model
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
+def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
     """
+        json_path - path with json that describe dataset
+        normalize - if true images have value [-1, 1] else [0, 1]
+        swapaxes - if true [num_of_images, 4, h, w, 1] else [4, num_of_images, h, w, 1]
         Returns dataset in format Tuple[Tuple[train: np.ndarray, test: np.ndarray]]
         train | test: np.ndarray[A, B, height, width, 1]
-        Where A is number of images in a fold, B is 3 - [image, gt, roi]
+        Where A is number of images in a fold, B is 3 - [image, gt, roi, markers]
     """
     dataset = []
     with open(json_path, "r") as f:
@@ -30,36 +34,82 @@ def load_dataset(json_path: str) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
         images_path = os.path.join(
             folds_json['dataset_path'], folds_json['images'])
         roi_path = os.path.join(folds_json['dataset_path'], folds_json['roi'])
+        markers_path = os.path.join(folds_json['dataset_path'], folds_json['markers'])
 
-        def load_images(path: str) -> np.ndarray:
-            image = (io.imread(os.path.join(images_path, path), as_gray=True)[
-                np.newaxis, ..., np.newaxis] - 127.5) / 127.5
+        def load_images(path: str, w: int = None, h: int = None) -> np.ndarray:
+            image = None
+            if normalize:
+                image = (io.imread(os.path.join(images_path, path), as_gray=True)[
+                    np.newaxis, ..., np.newaxis] - 127.5) / 127.5
+            else:
+                image = io.imread(os.path.join(images_path, path), as_gray=True)[
+                    np.newaxis, ..., np.newaxis] / 255.0
             gt = io.imread(os.path.join(gt_path, path), as_gray=True)[
                 np.newaxis, ..., np.newaxis] / 255.0
             roi = io.imread(os.path.join(roi_path, path), as_gray=True)[
                 np.newaxis, ..., np.newaxis] / 255.0
-            return np.concatenate([image, gt, roi], axis=0)
+            markers = io.imread(os.path.join(markers_path, path), as_gray=True)[
+                np.newaxis, ..., np.newaxis] / 255.0
+
+            if w is not None and h is not None:
+                w, h = int(w), int(h)
+                image = cv2.resize(image[0], (w, h))[
+                    np.newaxis, ..., np.newaxis]
+                gt = cv2.resize(gt[0], (w, h))[np.newaxis, ..., np.newaxis]
+                roi = cv2.resize(roi[0], (w, h))[np.newaxis, ..., np.newaxis]
+                markers = cv2.resize(markers[0], (w, h))[np.newaxis, ..., np.newaxis]
+            return np.concatenate([image, gt, roi, markers], axis=0)
+
+        w, h = None, None
+        try:
+            w, h = folds_json['width'], folds_json['height']
+        except:
+            pass
 
         for fold in folds_json['folds']:
             dataset_fold_test = []
             dataset_fold_train = []
             for test_name in fold['test']:
-                dataset_fold_test.append(load_images(test_name))
+                dataset_fold_test.append(load_images(test_name, w, h))
             for train_name in fold['train']:
-                dataset_fold_train.append(load_images(train_name))
+                dataset_fold_train.append(load_images(train_name, w, h))
             dataset.append((np.array(dataset_fold_train),
                            np.array(dataset_fold_test)))
+    if swapaxes:
+        for i in range(len(dataset)):
+            a, b = dataset[i]
+            dataset[i] = (a.swapaxes(0, 1), b.swapaxes(0, 1))
     return dataset
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
-    def __init__(self, batch_size=32, patch_size=64, total_patches=768 * 30, noise_size=(64,)):
+    def __init__(self, 
+                 batch_size=32, 
+                 patch_size=64, 
+                 total_patches=32 * 24 * 30, 
+                 noise_size=(64, 64, 1), 
+                 hexagon_size=(17, 21), 
+                 neatness_range=(0.55, 0.70), 
+                 normalize=False, 
+                 inv_values=True, 
+                 remove_edges_ratio=0.1,
+                 rotation_range=(0, 0),
+                 random_shift = 8
+                 ):
         """Initialization
         Dataset is (x, y, roi)"""
+        assert total_patches % batch_size == 0
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.total_patches = total_patches
         self.noise_size = noise_size
+        self.hexagon_size = hexagon_size
+        self.neatness_range = neatness_range
+        self.normalize = normalize
+        self.inv_values = inv_values
+        self.remove_edges_ratio = remove_edges_ratio
+        self.rotation_range = rotation_range
+        self.random_shift = random_shift
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -76,33 +126,50 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
 
     def on_epoch_end(self):
         'Generate new hexagons after one epoch'
+        neatness = np.random.uniform(*self.neatness_range)
         self.h = generate_hexagons(self.total_patches,
-                                   (17, 21), 0.65, random_shift=8)
+                                   self.hexagon_size, 
+                                   neatness, 
+                                   random_shift=self.random_shift, 
+                                   remove_edges_ratio=self.remove_edges_ratio,
+                                   rotation_range=self.rotation_range)
         self.z = np.random.normal(0, 1, (self.total_patches, *self.noise_size))
+
+        if self.inv_values:
+            self.h = 1 - self.h
+
+        if self.normalize:
+            self.h = (self.h + 1) / 2
 
 
 class DataIterator(tf.keras.utils.Sequence):
     'Generates data for Keras'
 
-    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768):
-        """Initialization
-        Dataset is (x, y, roi)"""
+    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, normalize=False, inv_values=True):
+        """
+        Initialization
+        Dataset is (x, y, roi)
+        Inv_values - [0 - cell, 1 - edge] -> [0 - edge, 1 - cell] 
+        Normalize - [0, 1] -> [-1, +1]
+        """
         self.dataset = dataset
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.patch_per_image = patch_per_image
+        self.normalize = normalize
+        self.inv_values = inv_values
         self.on_epoch_end()
 
     def __len__(self) -> int:
         'Denotes the number of batches per epoch'
-        return len(self.x) // self.batch_size
+        return len(self.image) // self.batch_size
 
     def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
-        'Generate one batch of data'
+        'Generate one batch of data and returns y, x (mask, image)'
         # Generate indexes of the batch
         idx = np.s_[index * self.batch_size:(index+1)*self.batch_size]
-        x = self.x[idx]
-        y = self.y[idx]
+        x = self.image[idx]
+        y = self.mask[idx]
         return y, x  # mask, image
 
     def _get_constrain_roi(self, roi: np.ndarray) -> Tuple[int, int, int, int]:
@@ -115,9 +182,9 @@ class DataIterator(tf.keras.utils.Sequence):
 
     def on_epoch_end(self):
         'Generate new patches after one epoch'
-        self.x, self.y = [], []
+        self.image, self.mask = [], []
         mid = self.patch_size // 2
-        for x, y, roi in self.dataset:
+        for x, y, roi, markers in self.dataset:
             ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
             xrand = np.random.randint(
                 xmin + mid, xmax - mid, self.patch_per_image)
@@ -125,10 +192,19 @@ class DataIterator(tf.keras.utils.Sequence):
                 ymin + mid, ymax - mid, self.patch_per_image)
 
             for xpos, ypos in zip(xrand, yrand):
-                self.x.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
-                self.y.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                self.image.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                self.mask.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
 
-        self.x, self.y = np.array(self.x), np.array(self.y)
+        self.image, self.mask = np.array(self.image), np.array(self.mask)
+        if self.inv_values:
+            self.mask = 1 - self.mask
+
+        if self.normalize:
+            self.image, self.mask = (self.image + 1) / 2, (self.mask + 1) / 2
+
+    def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
+        'self.mask, self.image'
+        return self.mask, self.image
 
 
 class HexagonDataGenerator():
@@ -171,11 +247,13 @@ class HexagonDataGenerator():
         for i in range(self.batch_size):
             hexagon = grid_create_hexagons(
                 hex_size[i], neatness[i], self.patch_size, self.patch_size, random_shift[i])[np.newaxis, ...]
-            salted_hexagon = add_salt_and_pepper(hexagon, sap_ratio[i], salt_value[i], keep_edges[i])
+            salted_hexagon = add_salt_and_pepper(
+                hexagon, sap_ratio[i], salt_value[i], keep_edges[i])
             z = np.random.normal(size=hexagon.shape)
             data.append(np.concatenate([salted_hexagon, z, hexagon], axis=0))
         data = np.array(data)
-        generated_images = self.model.predict_on_batch([data[:, 0, ...], data[:, 1, ...]])
+        generated_images = self.model.predict_on_batch(
+            [data[:, 0, ...], data[:, 1, ...]])
         return data[:, 2, ...], normalization(generated_images)
 
     def __iter__(self):
@@ -193,7 +271,7 @@ class HexagonDataGenerator():
 
 if __name__ == "__main__":
     gen = HexagonDataGenerator(r'generator\models\20220325-1620\model_last.h5')
-    
+
     # print(time_measure(lambda: [y for y in zip(range(1000), gen)]))
     for i, g in zip(range(200), gen):
         gt, image = g
