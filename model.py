@@ -20,11 +20,24 @@ from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
 from tqdm import tqdm
-
 from dataset import DataIterator, HexagonDataGenerator, HexagonDataIterator
-
+import tensorflow.keras.backend as K
 np.set_printoptions(suppress=True)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+def dice_coef(y_true, y_pred):
+    smooth = 1.
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    score = (2. * intersection + smooth) / \
+        (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+    return score
+
+
+def dice_loss(y_true, y_pred):
+    loss = 1 - dice_coef(y_true, y_pred)
+    return loss
 
 
 class GAN():
@@ -270,7 +283,8 @@ class SegmentationUnet():
         self.model = self._unet_model()
         self.model.compile(
             optimizer=Adam(learning_rate=learning_rate),
-            loss=BinaryCrossentropy()
+            loss=[dice_loss, BinaryCrossentropy()],
+            loss_weights=[0.8, 0.2]
         )
         self._create_dirs_and_callbacks()
 

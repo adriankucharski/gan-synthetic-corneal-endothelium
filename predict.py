@@ -4,12 +4,13 @@ from skimage.morphology import square
 import os
 from pathlib import Path
 import numpy as np
-from dataset import load_dataset, DataIterator, HexagonDataIterator
+from dataset import DataIterator, HexagonDataIterator
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import Model, load_model
 from util import add_salt_and_pepper, normalization
 from typing import Tuple, Union
 from skimage import exposure
+from model import dice_loss
 
 
 def generate_dataset(generator_path: str, num_of_data: int,
@@ -82,7 +83,7 @@ def generate_dataset(generator_path: str, num_of_data: int,
 
 class UnetPrediction():
     def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64):
-        self.model: Model = load_model(model_path)
+        self.model: Model = load_model(model_path, custom_objects={'dice_loss': dice_loss})
         self.patch_size = patch_size
         self.stride = stride
         self.batch_size = batch_size
@@ -188,11 +189,11 @@ class UnetPrediction():
 if __name__ == '__main__':
     preds = []
     names = []
-    image_path = r'D:\Deep Learning\New arch\datasets\Gavet\images\24G.png'
+    image_path = r'D:\Deep Learning\New arch\datasets\Gavet\images\7G.png'
     for model_path in glob('segmentation/models/*'):
         name = Path(model_path).name
-        if any([s in name for s in ['2346', '2045', '0025']]):
-            model_path = os.path.join(model_path, 'model-05.hdf5')
+        if any([s in name for s in ['2346', '2045', '0025', '1419']]):
+            model_path = os.path.join(model_path, 'model-20.hdf5')
             unet_pred = UnetPrediction(model_path,  stride=8, batch_size=128)
             pred = unet_pred.predict(image_path)[0]
             preds.append(pred)

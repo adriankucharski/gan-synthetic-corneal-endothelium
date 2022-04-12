@@ -40,7 +40,7 @@ if __name__ == '__main__':
         'keep_edges': 0.8,
         'remove_edges_ratio': 0.05,
         'rotate90': True,
-        'rotation_range': None
+        'rotation_range': (-60, 60)
     }
 
     synthetic_image, synthetic_mask = None, None
@@ -80,6 +80,11 @@ if __name__ == '__main__':
         mask, image = DataIterator(train, 1, inv_values=False, patch_per_image=256 * 5).get_dataset()
         dataset = (image, mask)
         params['type'] = 'raw-dataset'
+   
+    image, mask = dataset
+    for i in range(len(mask)):
+        blured = filters.gaussian(mask[i], sigma=1, multichannel=True)
+        mask[i] = np.clip(blured + mask[i], 0, 1)
    
     unet = SegmentationUnet()
     dumb_params(params)

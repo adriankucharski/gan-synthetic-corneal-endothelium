@@ -4,7 +4,7 @@ Dataset
 @author: Adrian Kucharski
 """
 from typing import Tuple
-from matplotlib import pyplot as plt
+from matplotlib import markers, pyplot as plt
 
 import numpy as np
 from skimage import io, transform, morphology
@@ -22,10 +22,10 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
     """
         json_path - path with json that describe dataset
         normalize - if true images have value [-1, 1] else [0, 1]
-        swapaxes - if true [num_of_images, 3, h, w, 1] else [3, num_of_images, h, w, 1]
+        swapaxes - if true [num_of_images, 4, h, w, 1] else [4, num_of_images, h, w, 1]
         Returns dataset in format Tuple[Tuple[train: np.ndarray, test: np.ndarray]]
         train | test: np.ndarray[A, B, height, width, 1]
-        Where A is number of images in a fold, B is 3 - [image, gt, roi]
+        Where A is number of images in a fold, B is 3 - [image, gt, roi, markers]
     """
     dataset = []
     with open(json_path, "r") as f:
@@ -34,6 +34,7 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
         images_path = os.path.join(
             folds_json['dataset_path'], folds_json['images'])
         roi_path = os.path.join(folds_json['dataset_path'], folds_json['roi'])
+        markers_path = os.path.join(folds_json['dataset_path'], folds_json['markers'])
 
         def load_images(path: str, w: int = None, h: int = None) -> np.ndarray:
             image = None
@@ -47,6 +48,8 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
                 np.newaxis, ..., np.newaxis] / 255.0
             roi = io.imread(os.path.join(roi_path, path), as_gray=True)[
                 np.newaxis, ..., np.newaxis] / 255.0
+            markers = io.imread(os.path.join(markers_path, path), as_gray=True)[
+                np.newaxis, ..., np.newaxis] / 255.0
 
             if w is not None and h is not None:
                 w, h = int(w), int(h)
@@ -54,7 +57,8 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
                     np.newaxis, ..., np.newaxis]
                 gt = cv2.resize(gt[0], (w, h))[np.newaxis, ..., np.newaxis]
                 roi = cv2.resize(roi[0], (w, h))[np.newaxis, ..., np.newaxis]
-            return np.concatenate([image, gt, roi], axis=0)
+                markers = cv2.resize(markers[0], (w, h))[np.newaxis, ..., np.newaxis]
+            return np.concatenate([image, gt, roi, markers], axis=0)
 
         w, h = None, None
         try:
@@ -180,7 +184,7 @@ class DataIterator(tf.keras.utils.Sequence):
         'Generate new patches after one epoch'
         self.image, self.mask = [], []
         mid = self.patch_size // 2
-        for x, y, roi in self.dataset:
+        for x, y, roi, markers in self.dataset:
             ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
             xrand = np.random.randint(
                 xmin + mid, xmax - mid, self.patch_per_image)
