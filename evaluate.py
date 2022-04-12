@@ -16,25 +16,31 @@ from predict import UnetPrediction
 from util import postprocess_sauvola
 
 
-def mark_with_markers(im, markers, labeled=True, mask=None):
+def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, mask: np.ndarray = None) -> np.ndarray:
     if labeled == False:
         markers = scipy.ndimage.label(markers)[0]
-
-    imb = im > 0
-    im = np.array(imb * (255 * 255), dtype=np.uint16)
+        
+    im = np.array((im > 0) * (255 * 255), dtype=np.uint16)
     if mask is not None:
         im[mask == False] = (255 * 255)
-    print(markers)
+
+    im_shape = im.shape
+    
+    im = im[..., 0] if len(im.shape) == 3 else im
+    mask = mask[..., 0] if len(mask.shape) == 3 else mask
+    markers = markers[..., 0] if len(markers.shape) == 3 else markers
+  
     for (y, x) in zip(*np.where(markers > 0)):
         if im[y, x] == 255*255:
             continue
-        im = flood_fill(im, (y, x), markers[y, x], selem=np.array(
-            [[0, 1, 0], [1, 1, 1], [0, 1, 0]]))
+        new_value = markers[y, x]
+        seed_point = (y, x)
+        footprint = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
+        im = flood_fill(im, seed_point, new_value, footprint=footprint)
     if mask is not None:
         im[mask == False] = 0
-    #im[mask_e == False] = 0
     im[im == 255*255] = 0
-    return im
+    return im[..., np.newaxis] if len(im_shape) == 3 else im
 
 
 def mark_holes(im, mask, size=5):
@@ -110,15 +116,16 @@ def dice(A, B):
 def pearsonr_image(im1, im2, roi, markers, plotpath=None):
     markers[roi == False] = 0
     markers = scipy.ndimage.label(markers)[0]
+    markers = markers[..., 0] if len(markers.shape) == 3 else markers
 
-    im1[roi == False] = 255
-    im2[roi == False] = 255
-    arr1 = mark_with_markers(im1, markers)
-    arr2 = mark_with_markers(im2, markers)
+    arr1 = mark_with_markers(im1, markers, labeled=True, mask=roi)
+    arr2 = mark_with_markers(im2, markers, labeled=True, mask=roi)
 
     cell_size1 = []
     cell_size2 = []
-    for (y, x) in zip(*np.where(markers > 0)):
+    
+    indexes = np.swapaxes(np.array(np.where(markers > 0)), 0, 1)
+    for (y, x) in indexes:
         label = markers[y, x]
         cell1 = np.count_nonzero(arr1 == label)
         cell2 = np.count_nonzero(arr2 == label)
@@ -134,6 +141,7 @@ def pearsonr_image(im1, im2, roi, markers, plotpath=None):
         plt.title('Pearsonr cells area: ' + str('%.4f' % pearsonr))
         plt.savefig(plotpath)
     return pearsonr
+
 
 def dice(A, B):
     A = A.flatten()
@@ -202,20 +210,18 @@ if __name__ == '__main__':
             imgs_model = []
             for i in range(len(predicted)):
                 p = postprocess_sauvola(predicted[i], rois[i], pruning_op=True)
-                p_dilated = morphology.dilation(p[..., 0], morphology.square(3))
+                p_dilated = morphology.dilation(
+                    p[..., 0], morphology.square(3))
                 gt_dilated = morphology.dilation(
                     gts[i][..., 0], morphology.square(3))
-                
-                
-                
+            
                 mhd = MHD(gts[i], p)
                 dc = dice(p_dilated, gt_dilated)
                 pearsonr = pearsonr_image(gts[i], p, rois[i], markers[i])
                 
-                pearsonrs.append()
                 dcs.append(dc)
                 mhds.append(mhd)
                 pearsonrs.append(pearsonr)
                 imgs_model.append(p - gt_dilated[..., np.newaxis])
             imgs.append(np.concatenate(imgs_model, axis=1))
-            print(model_path, np.mean(dcs), np.mean(mhds), np.mean(pearsonrs))
+            print(Path(model_path).name, f'{np.mean(dcs):.3f}', f'{np.mean(mhds):.3f}', f'{np.mean(pearsonrs):.3f}')
