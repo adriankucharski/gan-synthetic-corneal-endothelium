@@ -3,20 +3,46 @@ Dataset
 
 @author: Adrian Kucharski
 """
-from typing import Tuple
-from matplotlib import markers, pyplot as plt
-
-import numpy as np
-from skimage import io, transform, morphology
-import os
-import tensorflow as tf
-from hexgrid import generate_hexagons, grid_create_hexagons
-from util import add_salt_and_pepper, normalization, time_measure
 import json
+import os
+from typing import Tuple, Union
+
 import cv2
-from tensorflow.keras.models import load_model, Model
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+from matplotlib import pyplot as plt
+from skimage import exposure, io, morphology
+from tensorflow.keras.models import Model, load_model
+
+from hexgrid import generate_hexagons, grid_create_hexagons
+from util import add_salt_and_pepper, normalization
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+def images_preprocessing(images: Union[Tuple[np.ndarray], np.ndarray], masks = None, gamma_range=(0.5, 1.0), noise_range=(-1e-2, 1e-2), rotate90=True) -> Union[np.ndarray, Tuple[np.ndarray]]:
+    if isinstance(images, np.ndarray) and len(images.shape) == 3:
+        images = [images]
+    if gamma_range is not None:
+        for i in range(len(images)):
+            rgamma = np.random.uniform(*gamma_range)
+            images[i] = exposure.adjust_gamma(images[i], rgamma)
+            
+    if noise_range is not None:
+        r = np.random.uniform(*noise_range, size=images.shape)
+        images = images + r
+        
+    if rotate90:
+        k = np.random.randint(0, 4, size=len(images))
+        for i in range(len(images)):
+            if masks is not None:
+                masks[i] = np.rot90(masks[i], k=k[i])
+            images[i] = np.rot90(images[i], k=k[i])
+    
+    if masks is not None:
+        return np.clip(images, 0, 1), masks
+    return np.clip(images, 0, 1)
+    
 
 def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
     """
@@ -80,6 +106,66 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
             a, b = dataset[i]
             dataset[i] = (a.swapaxes(0, 1), b.swapaxes(0, 1))
     return dataset
+
+
+
+def generate_dataset(generator_path: str, num_of_data: int,
+                     batch_size=32,
+                     patch_size=64,
+                     noise_size=(64, 64, 1),
+                     hexagon_size=(17, 21),
+                     neatness_range=(0.55, 0.7),
+                     inv_values=True,
+                     sap_ratio=(0.0, 0.2),
+                     sap_value_range=(0.5, 1.0),
+                     result_gamma_range=(0.25, 1.75),
+                     noise_range=(-1e-3, 1e-3),
+                     keep_edges: float = 1.0,
+                     edges_thickness: int = 1,
+                     remove_edges_ratio: float = 0,
+                     rotate90=True,
+                     rotation_range=(0, 0)
+                     ) -> Tuple[np.ndarray, np.ndarray]:
+    model_generator: Model = load_model(generator_path)
+    hex_it = HexagonDataIterator(
+        batch_size=batch_size,
+        patch_size=patch_size,
+        noise_size=noise_size,
+        inv_values=inv_values,
+        total_patches=num_of_data,
+        hexagon_size=hexagon_size,
+        neatness_range=neatness_range,
+        remove_edges_ratio=remove_edges_ratio,
+        rotation_range=rotation_range
+    )
+
+    masks, images = [], []
+    for h, z in hex_it:
+        salty_h = h
+        if sap_ratio is not None:
+            salty_h = np.array(h)
+            for i in range(len(salty_h)):
+                ratio = np.random.uniform(*sap_ratio)
+                value = np.random.uniform(*sap_value_range)
+                keepe = np.random.choice(
+                    [True, False], p=[keep_edges, 1 - keep_edges])
+                salty_h[i] = add_salt_and_pepper(
+                    salty_h[i], ratio, value, keepe)
+
+        p = model_generator.predict_on_batch([salty_h, z])
+        if edges_thickness > 1:
+            for i in range(len(h)):
+                func = morphology.erosion if inv_values else morphology.dilation
+                h[i] = func(h[i, ..., 0], morphology.square(
+                    edges_thickness))[..., np.newaxis]
+        masks.extend(h)
+        images.extend(p)
+    masks, images = np.array(masks), np.array(images)
+    images = (images + 1) / 2
+    if inv_values:
+        masks = 1 - masks
+    images, masks = images_preprocessing(images, masks, gamma_range=result_gamma_range, noise_range=noise_range, rotate90=rotate90)
+    return images, masks
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
@@ -270,7 +356,7 @@ class HexagonDataGenerator():
 
 
 if __name__ == "__main__":
-    gen = HexagonDataGenerator(r'generator\models\20220325-1620\model_last.h5')
+    gen = HexagonDataGenerator(r'generator\models\20220405-2359\model_144.h5')
 
     # print(time_measure(lambda: [y for y in zip(range(1000), gen)]))
     for i, g in zip(range(200), gen):

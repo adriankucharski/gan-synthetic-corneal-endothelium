@@ -10,7 +10,7 @@ from scipy.ndimage.morphology import binary_fill_holes
 from scipy.spatial import KDTree
 from skimage import morphology
 from skimage.segmentation import flood_fill
-
+from skimage.filters import thresholding
 from dataset import load_dataset
 from predict import UnetPrediction
 from util import postprocess_sauvola
@@ -199,7 +199,11 @@ if __name__ == '__main__':
 
     if action == 'custom':
         imgs = []
-        for model_path in glob(r'segmentation\models\20220408-1444\*'):
+        m = 0
+        for model_path in glob(r'segmentation\models\20220429-0235\*'):
+            m += 1
+            # if m < 20:
+            #     continue
             unet = UnetPrediction(
                 model_path,  stride=stride, batch_size=batch_size)
             predicted = unet.predict(images)
@@ -208,8 +212,14 @@ if __name__ == '__main__':
             mhds = []
             pearsonrs = []
             imgs_model = []
+            
             for i in range(len(predicted)):
                 p = postprocess_sauvola(predicted[i], rois[i], pruning_op=True)
+                # if m > 20:
+                #     pn = predicted[i] > thresholding.threshold_li(predicted[i])
+                #     combo = np.concatenate([pn, predicted[i], p], axis=1)
+                #     plt.imshow(combo, 'gray', vmax=1, vmin=0)
+                #     plt.show()
                 p_dilated = morphology.dilation(
                     p[..., 0], morphology.square(3))
                 gt_dilated = morphology.dilation(
@@ -225,3 +235,4 @@ if __name__ == '__main__':
                 imgs_model.append(p - gt_dilated[..., np.newaxis])
             imgs.append(np.concatenate(imgs_model, axis=1))
             print(Path(model_path).name, f'{np.mean(dcs):.3f}', f'{np.mean(mhds):.3f}', f'{np.mean(pearsonrs):.3f}')
+            m += 1

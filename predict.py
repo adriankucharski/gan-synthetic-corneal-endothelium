@@ -192,8 +192,8 @@ if __name__ == '__main__':
     image_path = r'D:\Deep Learning\New arch\datasets\Gavet\images\7G.png'
     for model_path in glob('segmentation/models/*'):
         name = Path(model_path).name
-        if any([s in name for s in ['2346', '2045', '0025', '1419']]):
-            model_path = os.path.join(model_path, 'model-20.hdf5')
+        if any([s in name for s in ['2357', '0235']]):
+            model_path = os.path.join(model_path, 'model-25.hdf5')
             unet_pred = UnetPrediction(model_path,  stride=8, batch_size=128)
             pred = unet_pred.predict(image_path)[0]
             preds.append(pred)

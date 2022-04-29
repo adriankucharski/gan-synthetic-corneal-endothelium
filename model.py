@@ -10,17 +10,16 @@ from typing import Tuple, Union
 import numpy as np
 import tensorflow as tf
 from skimage import io
-from tensorflow.keras.initializers import RandomNormal
-from tensorflow.keras.layers import (Activation, BatchNormalization, GaussianNoise, GaussianDropout,
-                                     Concatenate, Conv2D, Conv2DTranspose, UpSampling2D,
-                                     Dense, Dropout, Flatten, Input, LeakyReLU,
+from tensorflow.keras.layers import (Activation, BatchNormalization, GaussianDropout,
+                                     Concatenate, Conv2D, UpSampling2D,
+                                     Dropout, Input, LeakyReLU,
                                      MaxPool2D)
-from tensorflow.keras.losses import BinaryCrossentropy, Hinge
-from tensorflow.keras.models import Model, Sequential, load_model
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
 from tqdm import tqdm
-from dataset import DataIterator, HexagonDataGenerator, HexagonDataIterator
+from dataset import DataIterator, HexagonDataIterator
 import tensorflow.keras.backend as K
 np.set_printoptions(suppress=True)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -110,6 +109,13 @@ class GAN():
                 images.append(image)
             return np.array(images, dtype='uint8')
         return None
+    
+    def load_models(self, g_path: str = None, d_path: str = None):
+        if g_path:
+            self.g_model.load_weights(g_path)
+        if d_path:
+            self.d_model.load_weights(d_path)
+        return self
 
     def _save_models(self, g_path: str = None, d_path: str = None):
         if g_path:
@@ -258,7 +264,7 @@ class GAN():
             if (epoch + 1) % save_per_epochs == 0:
                 images = self._evaluate(epoch=epoch, data=evaluate_data)
                 self._write_images(epoch, images)
-                self._save_models(f'model_{epoch}.h5')
+                self._save_models(f'model_{epoch}.h5', f'model_{epoch}.h5')
 
     def summary(self):
         self.d_model.summary()
@@ -283,8 +289,8 @@ class SegmentationUnet():
         self.model = self._unet_model()
         self.model.compile(
             optimizer=Adam(learning_rate=learning_rate),
-            loss=[dice_loss, BinaryCrossentropy()],
-            loss_weights=[0.8, 0.2]
+            loss=[BinaryCrossentropy(), dice_loss],
+            loss_weights=[0.5, 0.5]
         )
         self._create_dirs_and_callbacks()
 
