@@ -4,6 +4,7 @@ Train Segmentation Unet
 @author: Adrian Kucharski
 """
 import os
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,26 +14,36 @@ from dataset import (generate_dataset, images_preprocessing,
                      load_dataset, DataIterator)
 from model import SegmentationUnet
 from util import dumb_params
-from auto_select import get_best_k_generators_paths
+from auto_select import get_best_k_generators_paths, get_best_of_the_bests
+from scipy.ndimage import gaussian_filter
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-
+def replace_images_with_models(paths: Tuple[str], model_name:str = 'model_{}.h5') -> Tuple[str]:
+    paths = list([p.replace('data/images', 'generator/models') for p in paths])
+    for i in range(len(paths)):
+        splitted = os.path.split(paths[i])
+        idx = splitted[-1]
+        path = os.path.join(*splitted[:-1], model_name.format(idx))
+        paths[i] = path
+    return paths
+    
 if __name__ == '__main__':
     fold = 0
-    dataset_name = 'Gavet'
-    path_gens = '20220429-0021'
+    dataset_name = 'Alizarine'
+    path_gens = '20220503-2026'
     
-    k = 7
-    _, indexes = get_best_k_generators_paths(f'data/images/{path_gens}/*', k = k, w = 64)
-    print(indexes)
+    k = 10
+    paths = get_best_of_the_bests(f'data/images/{path_gens}/', k = k, w = 64, paths_only=True, skip=25)
+    generators = replace_images_with_models(paths)
+    
+    print(generators)
 
-    indexes = [147, 148, 143, 136, 131, 102]
-    
-    generators = [f'generator/models/{path_gens}/model_{i}.h5' for i in indexes]
+    # generators = [f'generator/models/{path_gens}/model_{i}.h5' for i in indexes]
     params = {
         'num_of_data': (256) * 8,
-        'hexagon_size': (17, 27),
+        'hexagon_size': (17, 21),
         'batch_size':256,
         'sap_ratio': (0, 0.1),
         'neatness_range': (0.6, 0.75),
@@ -65,7 +76,11 @@ if __name__ == '__main__':
     #     plt.show()
     # exit()
     
-
+    if True:
+        si, sm = dataset 
+        for i in range(len(si)):
+            si[i] = gaussian_filter(si[i], sigma=0.75)
+        params['gaussian_filter'] = '0.75'
 
     train, test  = load_dataset(f'datasets/{dataset_name}/folds.json', normalize=False)[fold]
     validation_data = DataIterator(test, 1, patch_per_image=1, inv_values=False).get_dataset()
@@ -93,9 +108,9 @@ if __name__ == '__main__':
         for i in range(len(mask)):
             blured = filters.gaussian(mask[i], sigma=1, channel_axis=-1)
             mask[i] = np.clip(blured + mask[i], 0, 1)
-            # if i in [1, 2, 3]:
-            #     plt.imshow(mask[i], 'gray', vmin=0, vmax=1)
-            #     plt.show()
+            if i in [1, 2, 3]:
+                plt.imshow(mask[i], 'gray', vmin=0, vmax=1)
+                plt.show()
         dataset = (image, mask)
         params['gaussian_to_mask'] = True
     if False:

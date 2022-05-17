@@ -4,20 +4,27 @@ Other functions
 @author: Adrian Kucharski
 """
 
+import datetime
+import json
 import os
 from datetime import timedelta
 from glob import glob
-from timeit import default_timer as timer
-from typing import Callable, Tuple, Union
-import cv2
-import numpy as np
-import scipy.ndimage
-from matplotlib import pyplot as plt
-from skimage import io, morphology
-from skimage.filters import threshold_sauvola
-import datetime
 from pathlib import Path
-import json
+from timeit import default_timer as timer
+from typing import Callable, Tuple
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy
+import scipy.ndimage
+import skimage.filters as filters
+from matplotlib import pyplot as plt
+from scipy.ndimage import measurements
+from skimage import color, morphology, segmentation
+from skimage.filters import threshold_sauvola
+from skimage.future import graph
+
 
 def dumb_params(params: dict, spath: str='segmentation/params'):
     time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
@@ -132,3 +139,34 @@ def postprocess_sauvola(im: np.ndarray, roi: np.ndarray, size=5, dilation_square
     if dilation_square_size is not None and dilation_square_size > 0:
         im = morphology.dilation(im, morphology.square(dilation_square_size))
     return im.reshape((*im.shape[:2], 1))
+
+
+def neighbors_stats(image: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: bool=False) -> Tuple[Tuple[int], graph.RAG]:
+    labels, nums = measurements.label(markers)
+    
+    image_labeled = np.array(image)
+    for x, y in zip(*np.where(labels > 0)):
+        segmentation.flood_fill(image_labeled, (x,y), labels[x,y], connectivity=1, in_place=True)
+    image_labeled[roi == 0] = 0
+    image_labeled = filters.median(image_labeled, morphology.square(2))
+    
+    g = graph.rag_mean_color(image, image_labeled)
+    # Remove the first node which is connected to all nodes
+    g.remove_node(0)
+
+    if show:
+        if image.shape[-1] != 3:
+            image = color.gray2rgb(image)
+        _, ax = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(6, 8))
+        ax[1].imshow(image_labeled)
+        graph.show_rag(labels, g, image, ax=ax[0], edge_width=1.25)
+        plt.tight_layout()
+        plt.show()
+        
+    neighbors = []
+    for label in range(1, nums + 1):
+        n = len(list(g.neighbors(label))) if label in g.nodes else 0
+        neighbors.append({label: n})
+
+    return neighbors, g
+

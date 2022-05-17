@@ -2,15 +2,21 @@ import os
 import sys
 from glob import glob
 from pathlib import Path
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+import skimage.filters as filters
+from matplotlib import pyplot as plt
+from scipy.ndimage import measurements
 from scipy.ndimage.morphology import binary_fill_holes
 from scipy.spatial import KDTree
-from skimage import morphology
-from skimage.segmentation import flood_fill
+from skimage import morphology, segmentation, color
 from skimage.filters import thresholding
+from skimage.future import graph
+from skimage.segmentation import flood_fill
+
 from dataset import load_dataset
 from predict import UnetPrediction
 from util import postprocess_sauvola
@@ -200,12 +206,12 @@ if __name__ == '__main__':
     if action == 'custom':
         imgs = []
         m = 0
-        for model_path in glob(r'segmentation\models\20220429-0235\*'):
+        for model_path in glob(r'segmentation\models\20220505-2251\*'):
             m += 1
             # if m < 20:
             #     continue
             unet = UnetPrediction(
-                model_path,  stride=stride, batch_size=batch_size)
+                model_path,  stride=stride, batch_size=batch_size, sigma=0.75)
             predicted = unet.predict(images)
 
             dcs = []

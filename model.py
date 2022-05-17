@@ -48,7 +48,10 @@ class GAN():
                  patch_size=64,
                  patch_per_image=768,
                  g_path_last_name_save='model_last.h5',
-                 d_path_last_name_save='model_last.h5'
+                 d_path_last_name_save='model_last.h5',
+                 g_lr = 1e-5,
+                 d_lr = 2e-4,
+                 gan_lr = 2e-4,
                  ):
         self.log_path = log_path
         self.g_path_save = g_path_save
@@ -65,13 +68,13 @@ class GAN():
 
         self.g_model = self._generator_model()
         self.g_model.compile(
-            optimizer=Adam(1e-5),
+            optimizer=Adam(g_lr),
             loss='mae',
         )
 
         self.d_model = self._discriminator_model()
         self.d_model.compile(
-            optimizer=Adam(2e-4, beta_1=0.5),
+            optimizer=Adam(d_lr, beta_1=0.5),
             loss='binary_crossentropy',
             metrics=['accuracy']
         )
@@ -81,7 +84,7 @@ class GAN():
 
         self.gan = self._gan_model()
         self.gan.compile(
-            optimizer=Adam(2e-4, beta_1=0.5),
+            optimizer=Adam(gan_lr, beta_1=0.5),
             loss='binary_crossentropy',
         )
         self._create_dirs()
@@ -118,10 +121,10 @@ class GAN():
         return self
 
     def _save_models(self, g_path: str = None, d_path: str = None):
-        if g_path:
+        if g_path and self.g_path_save:
             path = os.path.join(self.g_path_save, g_path)
             self.g_model.save(path)
-        if d_path:
+        if d_path and self.d_path_save:
             path = os.path.join(self.d_path_save, d_path)
             self.d_model.save(path)
 
@@ -139,12 +142,17 @@ class GAN():
 
     def _create_dirs(self):
         time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
-        self.log_path = os.path.join(self.log_path, time)
-        self.g_path_save = os.path.join(self.g_path_save, time)
-        self.d_path_save = os.path.join(self.d_path_save, time)
-        self.evaluate_path_save = os.path.join(self.evaluate_path_save, time)
+        if self.log_path:
+            self.log_path = os.path.join(self.log_path, time)
+        if self.g_path_save:
+            self.g_path_save = os.path.join(self.g_path_save, time)
+        if self.d_path_save:
+            self.d_path_save = os.path.join(self.d_path_save, time)
+        if self.evaluate_path_save: 
+            self.evaluate_path_save = os.path.join(self.evaluate_path_save, time)
         for path in [self.log_path, self.g_path_save, self.d_path_save, self.evaluate_path_save]:
-            Path(path).mkdir(parents=True, exist_ok=True)
+            if path:
+                Path(path).mkdir(parents=True, exist_ok=True)
 
     def _gan_model(self):
         H = h = Input(self.input_size, name='mask')
@@ -217,7 +225,9 @@ class GAN():
                   'remove_edges_ratio': 0.1,
                   'rotation_range': (0, 0),
                   'random_shift': 8,
-              }):
+              },
+              dataset_rot90 = False
+            ):
         # Prepare label arrays for D and GAN training
         real_labels = tf.ones(
             (batch_size, *self.d_model.output_shape[1:]), dtype=tf.float32)
@@ -228,7 +238,7 @@ class GAN():
         for epoch in tqdm(range(epochs)):
             # Init iterator
             data_it = DataIterator(
-                dataset, batch_size, self.patch_size, self.patch_per_image, inv_values=True)
+                dataset, batch_size, self.patch_size, self.patch_per_image, inv_values=True, rot90=dataset_rot90)
             data_hz = HexagonDataIterator(batch_size, self.patch_size, self.patch_per_image * len(dataset), self.noise_size, **hexagon_params)
             steps = len(data_it)
             assert steps > log_per_steps

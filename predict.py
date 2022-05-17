@@ -1,6 +1,7 @@
 from glob import glob
 from skimage import io, filters, morphology
 from skimage.morphology import square
+from scipy.ndimage import gaussian_filter
 import os
 from pathlib import Path
 import numpy as np
@@ -82,11 +83,12 @@ def generate_dataset(generator_path: str, num_of_data: int,
 
 
 class UnetPrediction():
-    def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64):
+    def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64, sigma = None):
         self.model: Model = load_model(model_path, custom_objects={'dice_loss': dice_loss})
         self.patch_size = patch_size
         self.stride = stride
         self.batch_size = batch_size
+        self.sigma = sigma
 
     def _build_img_from_patches(self, preds: np.ndarray, img_h: int, img_w: int) -> np.ndarray:
         patch_h, patch_w = preds.shape[1:3]
@@ -142,6 +144,8 @@ class UnetPrediction():
         for idx in range(len(data)):
             height, width = data[idx].shape[:2]
             img = self._add_outline(data[idx])
+            if self.sigma is not None:
+                img = gaussian_filter(img, self.sigma)
             new_height, new_width = img.shape[:2]
             patches = self._get_patches(img)
             predictions = self.model.predict(
@@ -189,13 +193,14 @@ class UnetPrediction():
 if __name__ == '__main__':
     preds = []
     names = []
-    image_path = r'D:\Deep Learning\New arch\datasets\Gavet\images\7G.png'
+    image_path = 'datasets/Alizarine/images/3.png'
     for model_path in glob('segmentation/models/*'):
         name = Path(model_path).name
-        if any([s in name for s in ['2357', '0235']]):
+        if any([s in name for s in ['20220505-2251', '20220415-0023']]):
             model_path = os.path.join(model_path, 'model-25.hdf5')
-            unet_pred = UnetPrediction(model_path,  stride=8, batch_size=128)
-            pred = unet_pred.predict(image_path)[0]
+            unet_pred = UnetPrediction(model_path,  stride=8, batch_size=128, sigma=0.75)
+            print(str(Path(image_path)))
+            pred = unet_pred.predict(str(Path(image_path)))[0]
             preds.append(pred)
             names.append(name)
 

@@ -231,7 +231,7 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
 class DataIterator(tf.keras.utils.Sequence):
     'Generates data for Keras'
 
-    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, normalize=False, inv_values=True):
+    def __init__(self, dataset: Tuple[np.ndarray], batch_size=32, patch_size=64, patch_per_image=768, normalize=False, inv_values=True, rot90=False):
         """
         Initialization
         Dataset is (x, y, roi)
@@ -244,6 +244,7 @@ class DataIterator(tf.keras.utils.Sequence):
         self.patch_per_image = patch_per_image
         self.normalize = normalize
         self.inv_values = inv_values
+        self.rot90 = rot90
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -278,8 +279,13 @@ class DataIterator(tf.keras.utils.Sequence):
                 ymin + mid, ymax - mid, self.patch_per_image)
 
             for xpos, ypos in zip(xrand, yrand):
-                self.image.append(x[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
-                self.mask.append(y[ypos-mid:ypos+mid, xpos-mid:xpos+mid])
+                px = x[ypos-mid:ypos+mid, xpos-mid:xpos+mid]
+                py = y[ypos-mid:ypos+mid, xpos-mid:xpos+mid]
+                if self.rot90:
+                    k = np.random.randint(0, 3)
+                    px, py = np.rot90(px, k), np.rot90(py, k)
+                self.image.append(px)
+                self.mask.append(py)
 
         self.image, self.mask = np.array(self.image), np.array(self.mask)
         if self.inv_values:
