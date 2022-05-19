@@ -14,35 +14,66 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from skimage import exposure, io, morphology
 from tensorflow.keras.models import Model, load_model
-
+from skimage import filters
 from hexgrid import generate_hexagons, grid_create_hexagons
 from util import add_salt_and_pepper, normalization
+from typing import NamedTuple
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-def images_preprocessing(images: Union[Tuple[np.ndarray], np.ndarray], masks = None, gamma_range=(0.5, 1.0), noise_range=(-1e-2, 1e-2), rotate90=True) -> Union[np.ndarray, Tuple[np.ndarray]]:
+
+class GeneratorParams(NamedTuple):
+    num_of_data: int
+    batch_size: int = 32
+    patch_size: int = 64
+    noise_size: Tuple[int, int, int] = (64, 64, 1)
+    hexagon_size: Tuple[int, int] = (17, 21)
+    neatness_range: Tuple[float, float] = (0.55, 0.7)
+    inv_values: bool = True
+    sap_ratio: Tuple[float, float] = (0.0, 0.2)
+    sap_value_range: Tuple[float, float] = (0.5, 1.0)
+    keep_edges: float = 1.0
+    edges_thickness: int = 1
+    remove_edges_ratio: float = 0
+    rotation_range: Tuple[float, float] = (0, 0)
+
+
+def images_preprocessing(
+    images: Union[Tuple[np.ndarray], np.ndarray],
+    masks=None,
+    gamma_range=(0.5, 1.0),
+    noise_range=(-1e-2, 1e-2),
+    rotate90=True,
+    gaussian_sigma: float = 1.0
+) -> Union[np.ndarray, Tuple[np.ndarray]]:
     if isinstance(images, np.ndarray) and len(images.shape) == 3:
         images = [images]
     if gamma_range is not None:
         for i in range(len(images)):
             rgamma = np.random.uniform(*gamma_range)
             images[i] = exposure.adjust_gamma(images[i], rgamma)
-            
+
     if noise_range is not None:
         r = np.random.uniform(*noise_range, size=images.shape)
         images = images + r
-        
+
     if rotate90:
         k = np.random.randint(0, 4, size=len(images))
         for i in range(len(images)):
             if masks is not None:
                 masks[i] = np.rot90(masks[i], k=k[i])
             images[i] = np.rot90(images[i], k=k[i])
-    
+
     if masks is not None:
+        if gaussian_sigma is not None and gaussian_sigma > 0:
+            for i in range(len(masks)):
+                blured = filters.gaussian(
+                    masks[i], sigma=gaussian_sigma, channel_axis=-1)
+                masks[i] = np.clip(blured + masks[i], 0, 1)
         return np.clip(images, 0, 1), masks
+
     return np.clip(images, 0, 1)
-    
+
 
 def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
     """
@@ -60,7 +91,8 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
         images_path = os.path.join(
             folds_json['dataset_path'], folds_json['images'])
         roi_path = os.path.join(folds_json['dataset_path'], folds_json['roi'])
-        markers_path = os.path.join(folds_json['dataset_path'], folds_json['markers'])
+        markers_path = os.path.join(
+            folds_json['dataset_path'], folds_json['markers'])
 
         def load_images(path: str, w: int = None, h: int = None) -> np.ndarray:
             image = None
@@ -83,7 +115,8 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
                     np.newaxis, ..., np.newaxis]
                 gt = cv2.resize(gt[0], (w, h))[np.newaxis, ..., np.newaxis]
                 roi = cv2.resize(roi[0], (w, h))[np.newaxis, ..., np.newaxis]
-                markers = cv2.resize(markers[0], (w, h))[np.newaxis, ..., np.newaxis]
+                markers = cv2.resize(markers[0], (w, h))[
+                    np.newaxis, ..., np.newaxis]
             return np.concatenate([image, gt, roi, markers], axis=0)
 
         w, h = None, None
@@ -108,8 +141,20 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
     return dataset
 
 
+def generate_dataset_from_generators(generators: str, params: GeneratorParams):
+    synthetic_image, synthetic_mask = None, None
+    for generator in generators:
+        image, mask = generate_dataset(generator, **params)
+        if synthetic_mask is None and synthetic_image is None:
+            synthetic_image = image
+            synthetic_mask = mask
+        else:
+            synthetic_image = np.concatenate([synthetic_image, image], axis=0)
+            synthetic_mask = np.concatenate([synthetic_mask, mask], axis=0)
+    return  (synthetic_image, synthetic_mask)
 
-def generate_dataset(generator_path: str, num_of_data: int,
+def generate_dataset(generator_path: str,
+                     num_of_data: int,
                      batch_size=32,
                      patch_size=64,
                      noise_size=(64, 64, 1),
@@ -118,12 +163,9 @@ def generate_dataset(generator_path: str, num_of_data: int,
                      inv_values=True,
                      sap_ratio=(0.0, 0.2),
                      sap_value_range=(0.5, 1.0),
-                     result_gamma_range=(0.25, 1.75),
-                     noise_range=(-1e-3, 1e-3),
                      keep_edges: float = 1.0,
                      edges_thickness: int = 1,
                      remove_edges_ratio: float = 0,
-                     rotate90=True,
                      rotation_range=(0, 0)
                      ) -> Tuple[np.ndarray, np.ndarray]:
     model_generator: Model = load_model(generator_path)
@@ -164,23 +206,22 @@ def generate_dataset(generator_path: str, num_of_data: int,
     images = (images + 1) / 2
     if inv_values:
         masks = 1 - masks
-    images, masks = images_preprocessing(images, masks, gamma_range=result_gamma_range, noise_range=noise_range, rotate90=rotate90)
     return images, masks
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
-    def __init__(self, 
-                 batch_size=32, 
-                 patch_size=64, 
-                 total_patches=32 * 24 * 30, 
-                 noise_size=(64, 64, 1), 
-                 hexagon_size=(17, 21), 
-                 neatness_range=(0.55, 0.70), 
-                 normalize=False, 
-                 inv_values=True, 
+    def __init__(self,
+                 batch_size=32,
+                 patch_size=64,
+                 total_patches=32 * 24 * 30,
+                 noise_size=(64, 64, 1),
+                 hexagon_size=(17, 21),
+                 neatness_range=(0.55, 0.70),
+                 normalize=False,
+                 inv_values=True,
                  remove_edges_ratio=0.1,
                  rotation_range=(0, 0),
-                 random_shift = 8
+                 random_shift=8
                  ):
         """Initialization
         Dataset is (x, y, roi)"""
@@ -214,9 +255,9 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         'Generate new hexagons after one epoch'
         neatness = np.random.uniform(*self.neatness_range)
         self.h = generate_hexagons(self.total_patches,
-                                   self.hexagon_size, 
-                                   neatness, 
-                                   random_shift=self.random_shift, 
+                                   self.hexagon_size,
+                                   neatness,
+                                   random_shift=self.random_shift,
                                    remove_edges_ratio=self.remove_edges_ratio,
                                    rotation_range=self.rotation_range)
         self.z = np.random.normal(0, 1, (self.total_patches, *self.noise_size))

@@ -9,86 +9,19 @@ import numpy as np
 import scipy
 import skimage.filters as filters
 from matplotlib import pyplot as plt
-from scipy.ndimage import measurements
-from scipy.ndimage.morphology import binary_fill_holes
+from scipy import stats
+from sklearn import metrics
 from scipy.spatial import KDTree
-from skimage import morphology, segmentation, color
-from skimage.filters import thresholding
-from skimage.future import graph
-from skimage.segmentation import flood_fill
+from skimage import morphology
 
 from dataset import load_dataset
 from predict import UnetPrediction
-from util import postprocess_sauvola
+from util import neighbors_stats, postprocess_sauvola, mark_with_markers, mark_holes
 
 
-def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, mask: np.ndarray = None) -> np.ndarray:
-    if labeled == False:
-        markers = scipy.ndimage.label(markers)[0]
-        
-    im = np.array((im > 0) * (255 * 255), dtype=np.uint16)
-    if mask is not None:
-        im[mask == False] = (255 * 255)
-
-    im_shape = im.shape
-    
-    im = im[..., 0] if len(im.shape) == 3 else im
-    mask = mask[..., 0] if len(mask.shape) == 3 else mask
-    markers = markers[..., 0] if len(markers.shape) == 3 else markers
-  
-    for (y, x) in zip(*np.where(markers > 0)):
-        if im[y, x] == 255*255:
-            continue
-        new_value = markers[y, x]
-        seed_point = (y, x)
-        footprint = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
-        im = flood_fill(im, seed_point, new_value, footprint=footprint)
-    if mask is not None:
-        im[mask == False] = 0
-    im[im == 255*255] = 0
-    return im[..., np.newaxis] if len(im_shape) == 3 else im
 
 
-def mark_holes(im, mask, size=5):
-    mask_e = binary_fill_holes(im > 0, np.array(
-        [[0, 1, 0], [1, 1, 1], [0, 1, 0]]))
-    im = np.array((im > 0) * (255*255), np.uint16)
-    x_max, y_max = im.shape
-    index = np.argwhere(im > 0)
-
-    index_full = np.array([[0, 0]])
-    for x in np.arange(-1, 2):
-        for y in np.arange(-1, 2):
-            index_full = np.concatenate((index_full, index - [x, y]))
-
-    T = index_full.T
-    X, Y = T[0], T[1]
-    # remove 0
-    X, Y = X[X > 0], Y[X > 0]
-    X, Y = X[Y > 0], Y[Y > 0]
-    #remove < x_max
-    X, Y = X[X < x_max], Y[X < x_max]
-    #remove < y_max
-    X, Y = X[Y < y_max], Y[Y < y_max]
-    T = np.array([X, Y])
-    index_full = T.T
-
-    im[mask_e == False] = (255*255)
-
-    i = 1
-    for idx in index_full:
-        x, y = idx
-        if im[x, y] == 0:
-            flood_fill(im, (x, y), i, selem=np.array(
-                [[0, 1, 0], [1, 1, 1], [0, 1, 0]]), inplace=True)
-            i += 1
-    im[mask == False] = 0
-    im[mask_e == False] = 0
-    im[im == (255*255)] = 0
-    return im
-
-
-def MHD(A, B):
+def MHD(A: np.ndarray, B: np.ndarray) -> float:
     # Get all non-zero points
     setA = np.argwhere(A > 0)
     setB = np.argwhere(B > 0)
@@ -105,21 +38,21 @@ def MHD(A, B):
     return np.max((fhd, rhd))
 
 
-def cell_stat(im, mask, minumum=15):
+def cell_stat(im: np.ndarray, mask: np.ndarray, minumum=15) -> Tuple[int, float]:
     im = mark_holes(im, mask)
     hist = np.histogram(im, np.arange(1, np.max(im) + 2),
                         (1, np.max(im) + 2))[0]
-    hist = hist[hist > minumum]  # usuń komórki mniejsze niż minumum
+    hist = hist[hist > minumum]  # remove cells with an area less than minimum
     return (len(hist), np.mean(hist))
 
 
-def dice(A, B):
+def dice(A: np.ndarray, B: np.ndarray) -> float:
     A = A.flatten()
     B = B.flatten()
     return 2.0*np.sum(A * B) / (np.sum(A) + np.sum(B))
 
 
-def pearsonr_image(im1, im2, roi, markers, plotpath=None):
+def pearsonr_image(im1, im2, roi, markers, plotpath=None) -> float:
     markers[roi == False] = 0
     markers = scipy.ndimage.label(markers)[0]
     markers = markers[..., 0] if len(markers.shape) == 3 else markers
@@ -129,7 +62,7 @@ def pearsonr_image(im1, im2, roi, markers, plotpath=None):
 
     cell_size1 = []
     cell_size2 = []
-    
+
     indexes = np.swapaxes(np.array(np.where(markers > 0)), 0, 1)
     for (y, x) in indexes:
         label = markers[y, x]
@@ -149,10 +82,11 @@ def pearsonr_image(im1, im2, roi, markers, plotpath=None):
     return pearsonr
 
 
-def dice(A, B):
-    A = A.flatten()
-    B = B.flatten()
-    return 2.0*np.sum(A * B) / (np.sum(A) + np.sum(B))
+def cell_neighbours_stats(im1: np.ndarray, im2: np.ndarray, roi: np.ndarray, markers: np.ndarray) -> float:
+    im1_n, _ = neighbors_stats(im1, markers, roi)
+    im2_n, _ = neighbors_stats(im2, markers, roi)
+
+    return metrics.accuracy_score(im1_n, im2_n)
 
 
 if __name__ == '__main__':
@@ -206,7 +140,7 @@ if __name__ == '__main__':
     if action == 'custom':
         imgs = []
         m = 0
-        for model_path in glob(r'segmentation\models\20220505-2251\*'):
+        for model_path in glob(r'segmentation\models\20220426-2318\model-50.hdf5'):
             m += 1
             # if m < 20:
             #     continue
@@ -217,28 +151,28 @@ if __name__ == '__main__':
             dcs = []
             mhds = []
             pearsonrs = []
-            imgs_model = []
-            
+            pearsonrs_cells = []
+
             for i in range(len(predicted)):
                 p = postprocess_sauvola(predicted[i], rois[i], pruning_op=True)
-                # if m > 20:
-                #     pn = predicted[i] > thresholding.threshold_li(predicted[i])
-                #     combo = np.concatenate([pn, predicted[i], p], axis=1)
-                #     plt.imshow(combo, 'gray', vmax=1, vmin=0)
-                #     plt.show()
+
                 p_dilated = morphology.dilation(
                     p[..., 0], morphology.square(3))
                 gt_dilated = morphology.dilation(
                     gts[i][..., 0], morphology.square(3))
-            
+
                 mhd = MHD(gts[i], p)
                 dc = dice(p_dilated, gt_dilated)
                 pearsonr = pearsonr_image(gts[i], p, rois[i], markers[i])
-                
+                pearsonr_cells = cell_neighbours_stats(
+                    p, gts[i], rois[i], markers[i])
+
                 dcs.append(dc)
                 mhds.append(mhd)
                 pearsonrs.append(pearsonr)
-                imgs_model.append(p - gt_dilated[..., np.newaxis])
-            imgs.append(np.concatenate(imgs_model, axis=1))
-            print(Path(model_path).name, f'{np.mean(dcs):.3f}', f'{np.mean(mhds):.3f}', f'{np.mean(pearsonrs):.3f}')
+                pearsonrs_cells.append(pearsonr_cells)
+
+            print('model dice mhd pearsonr cell_accuracy')
+            print(Path(model_path).name, f'{np.mean(dcs):.3f}', f'{np.mean(mhds):.3f}',
+                  f'{np.mean(pearsonrs):.3f}', f'{np.mean(pearsonrs_cells):.3f}')
             m += 1

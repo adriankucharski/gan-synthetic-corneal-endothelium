@@ -314,7 +314,7 @@ class SegmentationUnet():
         self.writer = tf.summary.create_file_writer(
             os.path.join(self.log_path, 'images'))
         self.model_save = ModelCheckpoint(
-            os.path.join(self.model_path_save, 'model-{epoch:02d}.hdf5'), save_best_only=False, period=1)
+            os.path.join(self.model_path_save, 'model-{epoch:02d}.hdf5'), save_best_only=False, save_freq='epoch')
         self.tensorboard_log_callback = TensorBoard(
             log_dir=self.log_path, write_images=True)
         self.tensorboard_image_callback = LambdaCallback(
