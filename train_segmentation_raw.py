@@ -24,7 +24,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 if __name__ == '__main__':
     params = {
         'fold': 0,
-        'dataset_name': 'Alizarine',
+        'dataset_name': 'Gavet',
         'patch_per_image': 500,
 
         'gamma_range': (0.5, 1.0),

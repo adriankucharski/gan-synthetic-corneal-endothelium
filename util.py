@@ -176,18 +176,18 @@ def neighbors_stats(image: np.ndarray, markers: np.ndarray, roi: np.ndarray, sho
 
     return neighbors, g
 
-def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, mask: np.ndarray = None) -> np.ndarray:
+def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, roi: np.ndarray = None) -> np.ndarray:
     if labeled == False:
         markers = scipy.ndimage.label(markers)[0]
 
     im = np.array((im > 0) * (255 * 255), dtype=np.uint16)
-    if mask is not None:
-        im[mask == False] = (255 * 255)
+    if roi is not None:
+        im[roi == False] = (255 * 255)
 
     im_shape = im.shape
 
     im = im[..., 0] if len(im.shape) == 3 else im
-    mask = mask[..., 0] if len(mask.shape) == 3 else mask
+    roi = roi[..., 0] if len(roi.shape) == 3 else roi
     markers = markers[..., 0] if len(markers.shape) == 3 else markers
 
     for (y, x) in zip(*np.where(markers > 0)):
@@ -197,13 +197,13 @@ def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, mask: 
         seed_point = (y, x)
         footprint = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]])
         im = flood_fill(im, seed_point, new_value, footprint=footprint)
-    if mask is not None:
-        im[mask == False] = 0
+    if roi is not None:
+        im[roi == False] = 0
     im[im == 255*255] = 0
     return im[..., np.newaxis] if len(im_shape) == 3 else im
 
 
-def mark_holes(im: np.ndarray, mask: np.ndarray) -> np.ndarray:
+def mark_holes(im: np.ndarray, roi: np.ndarray) -> np.ndarray:
     mask_e = binary_fill_holes(im > 0, np.array(
         [[0, 1, 0], [1, 1, 1], [0, 1, 0]]))
     im = np.array((im > 0) * (255*255), np.uint16)
@@ -233,11 +233,18 @@ def mark_holes(im: np.ndarray, mask: np.ndarray) -> np.ndarray:
     for idx in index_full:
         x, y = idx
         if im[x, y] == 0:
-            flood_fill(im, (x, y), i, selem=np.array(
-                [[0, 1, 0], [1, 1, 1], [0, 1, 0]]), inplace=True)
+            flood_fill(im, (x, y), i, footprint=np.array(
+                [[0, 1, 0], [1, 1, 1], [0, 1, 0]]), in_place=True)
             i += 1
-    im[mask == False] = 0
+    im[roi == False] = 0
     im[mask_e == False] = 0
     im[im == (255*255)] = 0
     return im
 
+
+def cell_stat(im: np.ndarray, roi: np.ndarray, minumum=15) -> Tuple[int, float]:
+    im = mark_holes(im, roi)
+    hist = np.histogram(im, np.arange(1, np.max(im) + 2),
+                        (1, np.max(im) + 2))[0]
+    hist = hist[hist > minumum]  # remove cells with an area less than minimum
+    return (len(hist), np.mean(hist))

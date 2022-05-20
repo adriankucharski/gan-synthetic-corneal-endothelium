@@ -32,9 +32,41 @@ def replace_images_with_models(paths: Tuple[str], model_name: str = 'model_{}.h5
 
 
 if __name__ == '__main__':
+    # generators = [
+    #     'generator/models/20220503-2026/9/20220503-2232/model_28.h5',
+    #     'generator/models/20220503-2026/0/20220503-2026/model_48.h5',
+    #     'generator/models/20220503-2026/14/20220503-2342/model_42.h5',
+    #     'generator/models/20220503-2026/8/20220503-2218/model_48.h5',
+    #     'generator/models/20220503-2026/5/20220503-2136/model_26.h5',
+    # ]
+    
+    generators = [
+        'generator/models/20220405-2359/model_149.h5',
+        'generator/models/20220405-2359/model_145.h5',
+        'generator/models/20220405-2359/model_144.h5',
+        'generator/models/20220405-2359/model_137.h5',
+        'generator/models/20220405-2359/model_136.h5',
+        'generator/models/20220405-2359/model_97.h5',
+        'generator/models/20220405-2359/model_91.h5',
+        'generator/models/20220405-2359/model_85.h5',
+        'generator/models/20220405-2359/model_81.h5',
+        'generator/models/20220405-2359/model_77.h5',
+    ]
+    
+    # generators = [
+    #     'generator/models/20220429-0021/model_148.h5',
+    #     'generator/models/20220429-0021/model_147.h5',
+    #     'generator/models/20220429-0021/model_145.h5',
+    #     'generator/models/20220429-0021/model_143.h5',
+    #     'generator/models/20220429-0021/model_120.h5',
+    #     'generator/models/20220429-0021/model_109.h5',
+    #     'generator/models/20220429-0021/model_102.h5',
+    #     'generator/models/20220429-0021/model_118.h5',
+    # ]
+
     generate_dataset_params = {
-        'num_of_data': (256) * 8,
-        'hexagon_size': (17, 21),
+        'num_of_data': 1024 * 20 // len(generators),
+        'hexagon_size': (17, 25),
         'batch_size': 256,
         'sap_ratio': (0, 0.1),
         'neatness_range': (0.6, 0.8),
@@ -51,22 +83,22 @@ if __name__ == '__main__':
 
         'gamma_range': (0.5, 1.0),
         'rotate90': True,
-        'noise_range': None,
+        'noise_range': (-1e-2, 1e-2),
         'gaussian_sigma': 1.0,
 
         'path_gens': '20220503-2026',
         'best_k': 1,
 
         'generate_dataset_params': generate_dataset_params,
+        'generators': generators,
     }
 
     # paths = get_best_of_the_bests(
     #     f'data/images/{params["path_gens"]}/', k=params['best_k'], w=64, paths_only=True, skip=25)
     # generators = replace_images_with_models(paths)
-    generators = ['generator/models/20220503-2026\\4\\20220503-2122\\model_29.h5']
 
     synthetic_image, synthetic_mask = generate_dataset_from_generators(
-        generators, params['generate_dataset_params'])
+        params['generators'], params['generate_dataset_params'])
     dataset = images_preprocessing(synthetic_image, synthetic_mask,
                                    gamma_range=params['gamma_range'],
                                    noise_range=params['noise_range'],
@@ -75,18 +107,13 @@ if __name__ == '__main__':
                                    )
 
 
-    for i in range(len(synthetic_image)):
-        a = synthetic_image[i]
-        plt.imshow(a, 'gray', vmin=0, vmax=1)
-        plt.show()
-    exit()
-
     _, test = load_dataset(
-        f'datasets/{dataset_name}/folds.json', normalize=False)[fold]
+        f'datasets/{params["dataset_name"]}/folds.json', normalize=False)[params['fold']]
     validation_data = DataIterator(
         test, 1, patch_per_image=1, inv_values=False).get_dataset()
 
-    unet = SegmentationUnet()
-    dumb_params(params)
+    unet = SegmentationUnet(log_path_save='segmentation/logs',
+                            model_path_save='segmentation/models/synthetic')
+    dumb_params(params, 'segmentation/params/synthetic')
     unet.train(25, dataset, validation_data, validation_split=0.10)
     # os.system("shutdown /s /t 60")
