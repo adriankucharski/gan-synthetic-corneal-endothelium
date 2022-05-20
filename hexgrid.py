@@ -6,6 +6,8 @@ import cv2
 import multiprocessing
 import itertools
 
+from util import cell_stat
+
 
 def closest(points: np.ndarray, xy: np.ndarray, k=1) -> np.ndarray:
     # distance = np.linalg.norm(points-xy, axis=1)
@@ -117,12 +119,13 @@ if __name__ == '__main__':
 
     while True:
         params = {
-            'hex_size': np.random.uniform(17, 17),
-            'neatness': np.random.uniform(0.55, 0.70),
+            'hex_size': np.random.uniform(27, 31),
+            'neatness': np.random.uniform(0.6, 0.75),
             'random_shift': 1,
             'remove_edges_ratio': 0.02,
             'rotation': np.random.uniform(-60, 60)
         }
         h = grid_create_hexagons(**params)
+        print(cell_stat(h, np.ones_like(h)))
         plt.imshow(h, 'gray')
         plt.show()

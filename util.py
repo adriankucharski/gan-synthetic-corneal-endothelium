@@ -21,7 +21,7 @@ import scipy.ndimage
 import skimage.filters as filters
 from matplotlib import pyplot as plt
 from scipy.ndimage import measurements
-from skimage import color, morphology, segmentation
+from skimage import color, morphology, segmentation, measure
 from skimage.filters import threshold_sauvola
 from skimage.future import graph
 from scipy.ndimage.morphology import binary_fill_holes
@@ -143,29 +143,32 @@ def postprocess_sauvola(im: np.ndarray, roi: np.ndarray, size=5, dilation_square
     return im.reshape((*im.shape[:2], 1))
 
 
-def neighbors_stats(image: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: bool=False) -> Tuple[Tuple[int], graph.RAG]:
-    image = image.reshape((image.shape[:2]))
+def neighbors_stats(im: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: bool=False) -> Tuple[Tuple[int], graph.RAG]:
+    im = im.reshape((im.shape[:2]))
     markers = markers.reshape((markers.shape[:2]))
     roi = roi.reshape((roi.shape[:2]))
     
+    if np.count_nonzero(im) < np.prod(im.shape):
+        im = np.max(im) - im
+    
     labels, nums = measurements.label(markers)
     
-    image_labeled = np.array(image)
+    image_labeled = np.array(im)
     for x, y in zip(*np.where(labels > 0)):
         segmentation.flood_fill(image_labeled, (x,y), labels[x,y], connectivity=1, in_place=True)
     image_labeled[roi == 0] = 0
     image_labeled = filters.median(image_labeled, morphology.square(2))
     
-    g = graph.rag_mean_color(image, image_labeled)
+    g = graph.rag_mean_color(im, image_labeled)
     # Remove the first node which is connected to all nodes
     g.remove_node(0)
 
     if show:
-        if image.shape[-1] != 3:
-            image = color.gray2rgb(image)
+        if im.shape[-1] != 3:
+            im = color.gray2rgb(im)
         _, ax = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(6, 8))
         ax[1].imshow(image_labeled)
-        graph.show_rag(labels, g, image, ax=ax[0], edge_width=1.25)
+        graph.show_rag(labels, g, im, ax=ax[0], edge_width=1.25)
         plt.tight_layout()
         plt.show()
         
@@ -243,8 +246,55 @@ def mark_holes(im: np.ndarray, roi: np.ndarray) -> np.ndarray:
 
 
 def cell_stat(im: np.ndarray, roi: np.ndarray, minumum=15) -> Tuple[int, float]:
+    im = im.reshape(im.shape[:2])
+    roi = roi.reshape(roi.shape[:2])
     im = mark_holes(im, roi)
     hist = np.histogram(im, np.arange(1, np.max(im) + 2),
                         (1, np.max(im) + 2))[0]
     hist = hist[hist > minumum]  # remove cells with an area less than minimum
     return (len(hist), np.mean(hist))
+
+def create_markers(gt: np.ndarray, roi: np.ndarray = None, min_size = 3, connectivity=2) -> np.ndarray:
+    """
+    Create markers from an GT image
+    """
+    if np.count_nonzero(gt) < np.prod(gt.shape):
+        gt = np.max(gt) - gt
+        
+    gt = morphology.erosion(gt, np.ones((3,3)))
+    labels: np.ndarray = measure.label(gt, connectivity=connectivity)
+    
+    labels_flat = labels.ravel()
+    labels_count = np.bincount(labels_flat)
+    index = np.argsort(labels_flat)[labels_count[0]:]
+    coordinates = np.column_stack(np.unravel_index(index, gt.shape))
+    lab = np.cumsum(labels_count[1:])
+
+    gt = np.zeros(gt.shape, np.uint8)
+    it = dict(enumerate(np.split(coordinates, lab), start=1))
+    for _, indexes in it.items():
+        if len(indexes) < min_size:
+            continue
+        center = np.mean(indexes, axis=0)
+        y, x = int(center[0]), int(center[1])
+        gt[y,x] = 255
+        
+    if roi is not None:
+        gt[roi == 0] = 0
+        
+    return gt
+
+def nonzeros_object_to_centroids(im: np.ndarray) -> np.ndarray:
+    """
+    Converts nonzeros connected objects into 1-pixel centroid
+    """
+    mx = np.max(im)
+    im = im > 0
+    labels, nums = measurements.label(im)
+    im: np.ndarray = np.zeros_like(im)
+    for i in range(1, nums):
+        y, x = np.where(labels == i)
+        y, x = np.mean(y, dtype='int'), np.mean(x, dtype='int')
+        im[y,x] = mx
+    
+    return im.astype('float')

@@ -98,7 +98,7 @@ def calculate(i: int,
               markers: np.ndarray,
               rois: np.ndarray
               ):
-    p = postprocess_sauvola(predicted[i], rois[i], pruning_op=True)
+    p = postprocess_sauvola(predicted[i], rois[i], size=15, pruning_op=True)
 
     p_dilated = morphology.dilation(
         p[..., 0], morphology.square(3))
@@ -151,7 +151,7 @@ if __name__ == '__main__':
                    itertools.repeat(rois)
                    )
 
-        with Pool(os.cpu_count() - 1) as pool:
+        with Pool(os.cpu_count() // 2) as pool:
             results = [pool.apply_async(calculate, arg) for arg in args]
 
             for res in results:

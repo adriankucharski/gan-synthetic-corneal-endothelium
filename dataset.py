@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
-from skimage import exposure, io, morphology
+from skimage import exposure, io, morphology, transform
 from tensorflow.keras.models import Model, load_model
 from skimage import filters
 from hexgrid import generate_hexagons, grid_create_hexagons
-from util import add_salt_and_pepper, normalization
+from util import add_salt_and_pepper, cell_stat, nonzeros_object_to_centroids, normalization
 from typing import NamedTuple
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -153,6 +153,7 @@ def generate_dataset_from_generators(generators: str, params: GeneratorParams):
             synthetic_mask = np.concatenate([synthetic_mask, mask], axis=0)
     return  (synthetic_image, synthetic_mask)
 
+
 def generate_dataset(generator_path: str,
                      num_of_data: int,
                      batch_size=32,
@@ -207,6 +208,38 @@ def generate_dataset(generator_path: str,
     if inv_values:
         masks = 1 - masks
     return images, masks
+
+
+def rescale_cell_size(
+    im: np.ndarray, 
+    gt: np.ndarray, 
+    markers: np.ndarray, 
+    roi: np.ndarray, 
+    target_area: float = None, 
+    precentage_scale: float = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    assert target_area is not None or precentage_scale is not None
+    
+    def calculate_resize_scale(area: float, target_area: float = None, precentage_scale: float = None) -> float:
+        r1 = np.sqrt(area)
+        if target_area is not None:
+            r2 = np.sqrt(target_area)
+        elif precentage_scale is not None:
+            r2 = np.sqrt(area * precentage_scale)
+        return r2 / r1
+    
+    _, area = cell_stat(gt, roi, 15)
+    scale_factor = calculate_resize_scale(area, target_area, precentage_scale)
+    
+    im = transform.rescale(im, scale_factor)
+    gt = transform.rescale(gt, scale_factor, anti_aliasing=True)
+    markers = transform.rescale(markers, scale_factor, anti_aliasing=True)
+    roi = transform.rescale(roi, scale_factor)
+    
+    gt = morphology.skeletonize(gt > 0).astype('float')
+    markers = nonzeros_object_to_centroids(markers)
+    
+    return im, gt, markers, roi
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):
