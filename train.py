@@ -17,23 +17,30 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 if __name__ == '__main__':
     hexagon_params = {
-        'hexagon_size': (17, 24),
-        'neatness_range': (0.55, 0.7),
-        'normalize': False,
+        'hexagon_size': (25, 32),
+        'neatness_range': (0.70, 0.80),
+        'normalize': False, 
         'inv_values': True,
         'remove_edges_ratio': 0.1,
         'rotation_range': (-60, 60),
         'random_shift': 8,
     }
     
-    fold = 0
-    train, test = load_dataset(r'datasets\Gavet\folds.json')[fold]
-    validation_data = DataIterator(
-        test, 1, patch_per_image=1, inv_values=True).get_dataset()
+    params = {
+        'hexagon_params': hexagon_params,
+        'dataset': 'datasets/Rotterdam/folds.json',
+        'fold': 0,
+        'patch_per_image': 512,
+        'g_lr': 1e-5,
+        'gan_lr': 5e-4
+    }
+    
+    train, test = load_dataset(params['dataset'])[params['fold']]
+    validation_data = DataIterator(test, 1, patch_per_image=1, inv_values=True).get_dataset()
 
 
-    gan = GAN(patch_per_image=512)
+    gan = GAN(patch_per_image=params['patch_per_image'], gan_lr=params['gan_lr'])
     dumb_params(hexagon_params, 'generator/hexagon_params')
-    gan.train(150, train, evaluate_data=validation_data, save_per_epochs=1, hexagon_params=hexagon_params)
+    gan.train(150, train, evaluate_data=validation_data, save_per_epochs=1, hexagon_params=params['hexagon_params'])
 
     

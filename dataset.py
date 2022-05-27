@@ -111,12 +111,15 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
 
             if w is not None and h is not None:
                 w, h = int(w), int(h)
-                image = cv2.resize(image[0], (w, h))[
-                    np.newaxis, ..., np.newaxis]
-                gt = cv2.resize(gt[0], (w, h))[np.newaxis, ..., np.newaxis]
-                roi = cv2.resize(roi[0], (w, h))[np.newaxis, ..., np.newaxis]
-                markers = cv2.resize(markers[0], (w, h))[
-                    np.newaxis, ..., np.newaxis]
+                image = transform.resize(image[0], (h, w))[np.newaxis]
+                roi = transform.resize(roi[0], (h, w))[np.newaxis]
+                
+                gt = transform.resize(gt[0, ..., 0], (h, w), anti_aliasing=True)
+                gt = morphology.skeletonize(gt > 0).astype('float')[np.newaxis, ..., np.newaxis]
+                
+                markers = transform.resize(markers[0, ..., 0], (h, w), anti_aliasing=True)
+                markers = nonzeros_object_to_centroids(markers)[np.newaxis, ..., np.newaxis]
+
             return np.concatenate([image, gt, roi, markers], axis=0)
 
         w, h = None, None
@@ -240,6 +243,7 @@ def rescale_cell_size(
     markers = nonzeros_object_to_centroids(markers)
     
     return im, gt, markers, roi
+
 
 
 class HexagonDataIterator(tf.keras.utils.Sequence):

@@ -116,7 +116,7 @@ def calculate(i: int,
 
 
 if __name__ == '__main__':
-    datasets_names = ['Alizarine', 'Gavet', 'Hard']
+    datasets_names = ['Alizarine', 'Gavet', 'Hard', 'Rotterdam']
 
     args = sys.argv[1:]
     if len(args) < 3:
