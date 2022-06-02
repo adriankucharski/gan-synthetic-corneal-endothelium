@@ -193,10 +193,11 @@ class UnetPrediction():
 if __name__ == '__main__':
     preds = []
     names = []
-    image_path = 'datasets/Gavet/images/7G.png'
-    for model_path in glob('segmentation/models/s/*'):
+    image_path = 'datasets/Rotterdam_1000/images/45R.png'
+    models = list(glob('segmentation/models/synthetic/*')) + list(glob('segmentation/models/raw/*'))
+    for model_path in models:
         name = Path(model_path).name
-        if any([s in name for s in ['20220520-0218', '20220520-0030', '20220520-0039']]):
+        if any([s in name for s in ['20220531-2329', '20220601-2353']]):
             model_path = os.path.join(model_path, 'model-25.hdf5')
             unet_pred = UnetPrediction(model_path,  stride=8, batch_size=128, sigma=0.75)
             print(str(Path(image_path)))

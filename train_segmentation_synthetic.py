@@ -35,9 +35,16 @@ if __name__ == '__main__':
     # Rotterdam
     generators = [
         # "generator/models/20220522-0151/model_16.h5",
-        "generator/models/20220522-0151/model_23.h5",
-        "generator/models/20220522-0151/model_113.h5",
+        # "generator/models/20220522-0151/model_23.h5",
+        # "generator/models/20220522-0151/model_113.h5",
         # "generator/models/20220522-0151/model_116.h5"
+        "generator/models/20220529-2217/model_23.h5",
+        "generator/models/20220529-2217/model_39.h5",
+        "generator/models/20220529-2217/model_40.h5",
+        "generator/models/20220529-2217/model_56.h5",
+        "generator/models/20220529-2217/model_69.h5",
+        "generator/models/20220529-2217/model_71.h5",
+        
     ]
     
     # Alizarine    
@@ -66,12 +73,13 @@ if __name__ == '__main__':
     #     'generator/models/20220429-0021/model_118.h5',
     # ]
 
+    num_of_data = (35*500) // len(generators)
     generate_dataset_params = {
-        'num_of_data': 1024 * 20 // len(generators),
-        'hexagon_size': (25, 32),
-        'batch_size': 256,
-        'sap_ratio': (0, 0.1),
-        'neatness_range': (0.7, 0.8),
+        'num_of_data': num_of_data,
+        'hexagon_size': (28, 32),
+        'batch_size': num_of_data // 128,
+        'sap_ratio': (0, 0.0),
+        'neatness_range': (0.7, 0.9),
         'sap_value_range': (0.2, 0.4),
         'keep_edges': 0.8,
         'remove_edges_ratio': 0.05,
@@ -80,15 +88,16 @@ if __name__ == '__main__':
     }
     params = {
         'fold': 0,
-        'dataset_name': 'Rotterdam',
+        'dataset_name': 'Rotterdam_1000',
 
-        'gamma_range': (0.5, 1.0),
+        'gamma_range': (0.8, 1.0),
         'rotate90': True,
-        'noise_range': (-1e-2, 1e-2),
+        'noise_range':  (-3e-2, 3e-2),
         'gaussian_sigma': 1.0,
 
         'generate_dataset_params': generate_dataset_params,
         'generators': generators,
+        'as_numpy': False
     }
 
     synthetic_image, synthetic_mask = generate_dataset_from_generators(
@@ -100,13 +109,14 @@ if __name__ == '__main__':
                                    gaussian_sigma=params['gaussian_sigma']
                                    )
 
+    print(synthetic_image.shape)
     # for i in range(len(synthetic_image)):
     #     plt.imshow(np.concatenate([synthetic_image[i], synthetic_mask[i]], axis=1), 'gray')
     #     plt.show()
     # exit()
 
     _, test = load_dataset(
-        f'datasets/{params["dataset_name"]}/folds.json', normalize=False)[params['fold']]
+        f'datasets/{params["dataset_name"]}/folds.json', normalize=False, as_numpy=params['as_numpy'])[params['fold']]
     validation_data = DataIterator(
         test, 1, patch_per_image=1, inv_values=False).get_dataset()
 

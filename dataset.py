@@ -75,7 +75,7 @@ def images_preprocessing(
     return np.clip(images, 0, 1)
 
 
-def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
+def load_dataset(json_path: str, normalize=True, swapaxes=False, as_numpy = True) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
     """
         json_path - path with json that describe dataset
         normalize - if true images have value [-1, 1] else [0, 1]
@@ -135,12 +135,36 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False) -> Tuple[Tuple[
                 dataset_fold_test.append(load_images(test_name, w, h))
             for train_name in fold['train']:
                 dataset_fold_train.append(load_images(train_name, w, h))
-            dataset.append((np.array(dataset_fold_train),
-                           np.array(dataset_fold_test)))
+            
+            if as_numpy:
+                dataset.append((np.array(dataset_fold_train), np.array(dataset_fold_test)))
+            else:
+                dataset.append((dataset_fold_train, dataset_fold_test))
+                
     if swapaxes:
-        for i in range(len(dataset)):
-            a, b = dataset[i]
-            dataset[i] = (a.swapaxes(0, 1), b.swapaxes(0, 1))
+        if as_numpy:
+            for i in range(len(dataset)):
+                a, b = dataset[i]
+                dataset[i] = (a.swapaxes(0, 1), b.swapaxes(0, 1))
+        else:
+            images_a, gts_a, rois_a, markers_a = [], [], [], []
+            images_b, gts_b, rois_b, markers_b = [], [], [], []
+            for k in range(len(dataset)):
+                a, b = dataset[k]
+                for ai in a:
+                    i, g, r, m = ai
+                    images_a.append(i)
+                    gts_a.append(g)
+                    rois_a.append(r)
+                    markers_a.append(m)
+                for bi in b:
+                    i, g, r, m = bi
+                    images_b.append(i)
+                    gts_b.append(g)
+                    rois_b.append(r)
+                    markers_b.append(m)
+                dataset[k] = [(images_a, gts_a, rois_a, markers_a), (images_b, gts_b, rois_b, markers_b)]
+                
     return dataset
 
 
@@ -262,7 +286,7 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
                  ):
         """Initialization
         Dataset is (x, y, roi)"""
-        assert total_patches % batch_size == 0
+        # assert total_patches % batch_size == 0
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.total_patches = total_patches
@@ -439,11 +463,9 @@ class HexagonDataGenerator():
         return self.__next__()
 
 
-if __name__ == "__main__":
-    gen = HexagonDataGenerator(r'generator\models\20220405-2359\model_144.h5')
+if __name__ == "__main__":    
+    train, test = load_dataset('datasets/Rotterdam_1000/folds.json', as_numpy=False)[0]
 
     # print(time_measure(lambda: [y for y in zip(range(1000), gen)]))
-    for i, g in zip(range(200), gen):
-        gt, image = g
-        plt.imshow(np.concatenate([gt, image], axis=1), cmap="gray")
-        plt.show()
+    for imga in train:
+        print(len(imga))

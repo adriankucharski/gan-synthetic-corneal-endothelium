@@ -177,7 +177,7 @@ def neighbors_stats(im: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: 
         n = len(list(g.neighbors(label))) if label in g.nodes else 0
         neighbors.append(n)
 
-    return neighbors, g
+    return np.array(neighbors), g
 
 def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, roi: np.ndarray = None) -> np.ndarray:
     if labeled == False:

@@ -85,11 +85,27 @@ def pearsonr_image(im1: np.ndarray, im2: np.ndarray, roi: np.ndarray, markers: n
     return pearsonr
 
 
-def cell_neighbours_stats(im1: np.ndarray, im2: np.ndarray, roi: np.ndarray, markers: np.ndarray) -> float:
-    im1_n, _ = neighbors_stats(im1, markers, roi)
-    im2_n, _ = neighbors_stats(im2, markers, roi)
 
-    return metrics.accuracy_score(im1_n, im2_n)
+def cell_neighbours_stats(im_true: np.ndarray, im_pred: np.ndarray, roi: np.ndarray, markers: np.ndarray) -> Tuple[float, float]:
+    neighbours_true, _ = neighbors_stats(im_true, markers, roi)
+    neighbours_pred, _ = neighbors_stats(im_pred, markers, roi)
+
+    hexagonality_true = np.sum(neighbours_true == 6) / len(neighbours_true)
+    hexagonality_pred = np.sum(neighbours_pred == 6) / len(neighbours_pred)
+    
+    hexagonality = 0
+    if hexagonality_true != 0:
+        hexagonality = np.abs(hexagonality_true - hexagonality_pred) # / hexagonality_true
+    neighbours = metrics.mean_absolute_error(neighbours_true, neighbours_pred)
+
+    # [3, 6, 5] - (1 / 3)
+    
+    # [2, 6, 2] - (1 / 3)
+    # [2, 6, 3] - (1 / 3)
+    # [2, 6, 4] - (1 / 3)
+    # r2
+    # return metrics.accuracy_score(im1_n, im2_n)
+    return neighbours, hexagonality
 
 
 def calculate(i: int,
@@ -98,7 +114,7 @@ def calculate(i: int,
               markers: np.ndarray,
               rois: np.ndarray
               ):
-    p = postprocess_sauvola(predicted[i], rois[i], size=15, pruning_op=True)
+    p = postprocess_sauvola(predicted[i], rois[i], size=5, pruning_op=True)
 
     p_dilated = morphology.dilation(
         p[..., 0], morphology.square(3))
@@ -108,15 +124,13 @@ def calculate(i: int,
     mhd = MHD(gts[i], p)
     dc = dice(p_dilated, gt_dilated)
     pearsonr = pearsonr_image(gts[i], p, rois[i], markers[i])
-    pearsonr_cells = cell_neighbours_stats(
-        p, gts[i], rois[i], markers[i])
-    cda = CDA(predicted[i], gts[i], rois[i])
+    neighbours, hexagonality = cell_neighbours_stats(p, gts[i], rois[i], markers[i])
 
-    return dc, mhd, pearsonr, pearsonr_cells, cda
+    return dc, mhd, pearsonr, neighbours, hexagonality
 
 
 if __name__ == '__main__':
-    datasets_names = ['Alizarine', 'Gavet', 'Hard', 'Rotterdam']
+    datasets_names = ['Alizarine', 'Gavet', 'Hard', 'Rotterdam', 'Rotterdam_1000']
 
     args = sys.argv[1:]
     if len(args) < 3:
@@ -131,18 +145,19 @@ if __name__ == '__main__':
     stride = 16
     batch_size = 128
     _, test = load_dataset(
-        f'datasets/{dataset_name}/folds.json', normalize=False, swapaxes=True)[int(fold)]
+        f'datasets/{dataset_name}/folds.json', normalize=False, swapaxes=True, as_numpy=False)[int(fold)]
+    print(len(test[0]))
     images, gts, rois, markers = test
 
-    for model_path in glob(os.path.join(models_path, '*')):
+    for model_path in glob(os.path.join(models_path, '*'))[10:]:
         unet = UnetPrediction(model_path, stride=stride, batch_size=batch_size)
         predicted = unet.predict(images)
 
         dcs = []
         mhds = []
         pearsonrs = []
-        pearsonrs_cells = []
-        cdas = []
+        neighbours = []
+        hexagonality = []
 
         args = zip(range(len(predicted)),
                    itertools.repeat(predicted),
@@ -155,17 +170,17 @@ if __name__ == '__main__':
             results = [pool.apply_async(calculate, arg) for arg in args]
 
             for res in results:
-                dc, mhd, pearsonr, pearsonr_cells, cda = res.get()
+                dc, mhd, pearsonr, neighbours_mse, hexagonality_rate = res.get()
                 dcs.append(dc)
                 mhds.append(mhd)
                 pearsonrs.append(pearsonr)
-                pearsonrs_cells.append(pearsonr_cells)
-                cdas.append(cda)
+                neighbours.append(neighbours_mse)
+                hexagonality.append(hexagonality_rate)
 
         print(Path(model_path).name,
               f'{np.mean(dcs):.3f}',
               f'{np.mean(mhds):.3f}',
               f'{np.mean(pearsonrs):.3f}',
-              f'{np.mean(pearsonrs_cells):.3f}',
-              f'{np.mean(cdas):.3f}'
+              f'{np.mean(neighbours):.3f}',
+              f'{np.mean(hexagonality):.3f}'
               )

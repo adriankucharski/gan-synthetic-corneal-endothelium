@@ -126,6 +126,6 @@ if __name__ == '__main__':
             'rotation': np.random.uniform(-60, 60)
         }
         h = grid_create_hexagons(**params)
-        print(cell_stat(h, np.ones_like(h)))
+        print(params['hex_size'])
         plt.imshow(h, 'gray')
         plt.show()

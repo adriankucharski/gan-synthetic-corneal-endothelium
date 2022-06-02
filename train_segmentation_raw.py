@@ -24,17 +24,18 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 if __name__ == '__main__':
     params = {
         'fold': 0,
-        'dataset_name': 'Rotterdam',
+        'dataset_name': 'Rotterdam_1000',
         'patch_per_image': 500,
 
         'gamma_range': (0.5, 1.0),
         'rotate90': True,
         'noise_range': None,
-        'gaussian_sigma': 1.0
+        'gaussian_sigma': 1.0,
+        'as_numpy': False
     }
 
     train, test = load_dataset(
-        f'datasets/{params["dataset_name"]}/folds.json', normalize=False)[params['fold']]
+        f'datasets/{params["dataset_name"]}/folds.json', normalize=False, as_numpy=params['as_numpy'])[params['fold']]
     validation_data = DataIterator(
         test, 1, patch_per_image=1, inv_values=False).get_dataset()
 
@@ -47,7 +48,6 @@ if __name__ == '__main__':
         rotate90=params['rotate90'],
         gaussian_sigma=params['gaussian_sigma']
     )
-
 
     unet = SegmentationUnet(log_path_save='segmentation/logs',
                             model_path_save='segmentation/models/raw')

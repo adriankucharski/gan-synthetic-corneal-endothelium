@@ -17,7 +17,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 if __name__ == '__main__':
     hexagon_params = {
-        'hexagon_size': (25, 32),
+        'hexagon_size': (29, 32),
         'neatness_range': (0.70, 0.80),
         'normalize': False, 
         'inv_values': True,
@@ -28,14 +28,15 @@ if __name__ == '__main__':
     
     params = {
         'hexagon_params': hexagon_params,
-        'dataset': 'datasets/Rotterdam/folds.json',
+        'dataset': 'datasets/Rotterdam_1000/folds.json',
         'fold': 0,
         'patch_per_image': 512,
-        'g_lr': 1e-5,
-        'gan_lr': 5e-4
+        'g_lr': 5e-5,
+        'gan_lr': 2e-4,
+        'as_numpy': False
     }
     
-    train, test = load_dataset(params['dataset'])[params['fold']]
+    train, test = load_dataset(params['dataset'], as_numpy=params['as_numpy'])[params['fold']]
     validation_data = DataIterator(test, 1, patch_per_image=1, inv_values=True).get_dataset()
 
 
