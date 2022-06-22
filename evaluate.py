@@ -95,7 +95,7 @@ def cell_neighbours_stats(im_true: np.ndarray, im_pred: np.ndarray, roi: np.ndar
     
     hexagonality = 0
     if hexagonality_true != 0:
-        hexagonality = np.abs(hexagonality_true - hexagonality_pred) # / hexagonality_true
+        hexagonality = np.abs(hexagonality_true - hexagonality_pred) / hexagonality_true
     neighbours = metrics.mean_absolute_error(neighbours_true, neighbours_pred)
 
     # [3, 6, 5] - (1 / 3)
@@ -109,12 +109,13 @@ def cell_neighbours_stats(im_true: np.ndarray, im_pred: np.ndarray, roi: np.ndar
 
 
 def calculate(i: int,
+              window_size: int,
               predicted: np.ndarray,
               gts: np.ndarray,
               markers: np.ndarray,
               rois: np.ndarray
               ):
-    p = postprocess_sauvola(predicted[i], rois[i], size=5, pruning_op=True)
+    p = postprocess_sauvola(predicted[i], rois[i], size=window_size, pruning_op=True)
 
     p_dilated = morphology.dilation(
         p[..., 0], morphology.square(3))
@@ -125,7 +126,6 @@ def calculate(i: int,
     dc = dice(p_dilated, gt_dilated)
     pearsonr = pearsonr_image(gts[i], p, rois[i], markers[i])
     neighbours, hexagonality = cell_neighbours_stats(p, gts[i], rois[i], markers[i])
-
     return dc, mhd, pearsonr, neighbours, hexagonality
 
 
@@ -133,54 +133,69 @@ if __name__ == '__main__':
     datasets_names = ['Alizarine', 'Gavet', 'Hard', 'Rotterdam', 'Rotterdam_1000']
 
     args = sys.argv[1:]
-    if len(args) < 3:
+    if len(args) < 4:
         print('Provide at least four arguments')
         exit()
 
-    dataset_name, fold, models_path = args[0:3]
+    dataset_name, fold, models_path, window_size = args[0:4]
     if dataset_name not in datasets_names:
         print('Dataset not found. Valid names', datasets_names)
         exit()
 
     stride = 16
-    batch_size = 128
+    batch_size = 256
     _, test = load_dataset(
         f'datasets/{dataset_name}/folds.json', normalize=False, swapaxes=True, as_numpy=False)[int(fold)]
-    print(len(test[0]))
     images, gts, rois, markers = test
 
-    for model_path in glob(os.path.join(models_path, '*'))[10:]:
-        unet = UnetPrediction(model_path, stride=stride, batch_size=batch_size)
-        predicted = unet.predict(images)
+    suffix = ''
+    if 'raw' in models_path: suffix = 'raw'
+    else: suffix = 'synthetic'
 
-        dcs = []
-        mhds = []
-        pearsonrs = []
-        neighbours = []
-        hexagonality = []
+    filename = f'{dataset_name}_{fold}_{window_size}_{suffix}.txt'
+    with open(os.path.join('temp', filename), 'w') as file:
+        for model_path in glob(os.path.join(models_path, '*'))[10:]:
+            unet = UnetPrediction(model_path, stride=stride, batch_size=batch_size)
+            predicted = unet.predict(images)
 
-        args = zip(range(len(predicted)),
-                   itertools.repeat(predicted),
-                   itertools.repeat(gts),
-                   itertools.repeat(markers),
-                   itertools.repeat(rois)
-                   )
+            dcs = []
+            mhds = []
+            pearsonrs = []
+            neighbours = []
+            hexagonality = []
 
-        with Pool(os.cpu_count() // 2) as pool:
-            results = [pool.apply_async(calculate, arg) for arg in args]
+            args = zip(range(len(predicted)),
+                    itertools.repeat(int(window_size)),
+                    itertools.repeat(predicted),
+                    itertools.repeat(gts),
+                    itertools.repeat(markers),
+                    itertools.repeat(rois)
+                    )
 
-            for res in results:
-                dc, mhd, pearsonr, neighbours_mse, hexagonality_rate = res.get()
-                dcs.append(dc)
-                mhds.append(mhd)
-                pearsonrs.append(pearsonr)
-                neighbours.append(neighbours_mse)
-                hexagonality.append(hexagonality_rate)
+            with Pool(os.cpu_count() // 2) as pool:
+                results = [pool.apply_async(calculate, arg) for arg in args]
 
-        print(Path(model_path).name,
-              f'{np.mean(dcs):.3f}',
-              f'{np.mean(mhds):.3f}',
-              f'{np.mean(pearsonrs):.3f}',
-              f'{np.mean(neighbours):.3f}',
-              f'{np.mean(hexagonality):.3f}'
-              )
+                for res in results:
+                    dc, mhd, pearsonr, neighbours_mse, hexagonality_rate = res.get()
+                    dcs.append(dc)
+                    mhds.append(mhd)
+                    pearsonrs.append(pearsonr)
+                    neighbours.append(neighbours_mse)
+                    hexagonality.append(hexagonality_rate)
+
+            print(Path(model_path).name,
+                f'{np.mean(dcs):.3f}',
+                f'{np.mean(mhds):.3f}',
+                f'{np.mean(pearsonrs):.3f}',
+                f'{np.mean(neighbours):.3f}',
+                f'{np.mean(hexagonality):.3f}'
+                )
+            
+            line = ' '.join([Path(model_path).name,
+                f'{np.mean(dcs):.3f}',
+                f'{np.mean(mhds):.3f}',
+                f'{np.mean(pearsonrs):.3f}',
+                f'{np.mean(neighbours):.3f}',
+                f'{np.mean(hexagonality):.3f}'
+            ])
+            file.write(line + '\n')

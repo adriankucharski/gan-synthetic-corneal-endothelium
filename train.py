@@ -17,8 +17,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 if __name__ == '__main__':
     hexagon_params = {
-        'hexagon_size': (29, 32),
-        'neatness_range': (0.70, 0.80),
+        'hexagon_size': (17, 27),
+        'neatness_range': (0.55, 0.8),
         'normalize': False, 
         'inv_values': True,
         'remove_edges_ratio': 0.1,
@@ -28,11 +28,12 @@ if __name__ == '__main__':
     
     params = {
         'hexagon_params': hexagon_params,
-        'dataset': 'datasets/Rotterdam_1000/folds.json',
-        'fold': 0,
+        'dataset': 'datasets/Gavet/folds.json',
+        'fold': 2,
         'patch_per_image': 512,
-        'g_lr': 5e-5,
+        'g_lr': 1e-5,
         'gan_lr': 2e-4,
+        'd_lr':  2e-4, 
         'as_numpy': False
     }
     
@@ -41,7 +42,7 @@ if __name__ == '__main__':
 
 
     gan = GAN(patch_per_image=params['patch_per_image'], gan_lr=params['gan_lr'])
-    dumb_params(hexagon_params, 'generator/hexagon_params')
-    gan.train(150, train, evaluate_data=validation_data, save_per_epochs=1, hexagon_params=params['hexagon_params'])
+    dumb_params(params, 'generator/hexagon_params')
+    gan.train(100, train, evaluate_data=validation_data, save_per_epochs=1, hexagon_params=params['hexagon_params'])
 
     

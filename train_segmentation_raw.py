@@ -4,18 +4,10 @@ Train Segmentation Unet
 @author: Adrian Kucharski
 """
 import os
-from typing import Tuple
 
-import matplotlib.pyplot as plt
-import numpy as np
-from skimage import filters
-
-from dataset import (generate_dataset, images_preprocessing,
-                     load_dataset, DataIterator)
+from dataset import (images_preprocessing, load_dataset, DataIterator)
 from model import SegmentationUnet
 from util import dumb_params
-from auto_select import get_best_k_generators_paths, get_best_of_the_bests
-from scipy.ndimage import gaussian_filter
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -23,7 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 if __name__ == '__main__':
     params = {
-        'fold': 0,
+        'fold': 2,
         'dataset_name': 'Rotterdam_1000',
         'patch_per_image': 500,
 

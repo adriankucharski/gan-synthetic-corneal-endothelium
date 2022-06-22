@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     while True:
         params = {
-            'hex_size': np.random.uniform(25, 32),
+            'hex_size': np.random.uniform(17, 27),
             'neatness': np.random.uniform(0.70, 0.80),
             'random_shift': 1,
             'remove_edges_ratio': 0.02,
