@@ -28,12 +28,12 @@ list_of_commands = [
     # r'python .\evaluate.py Alizarine 1 segmentation\models\synthetic\20220610-0115 7',
     # r'python .\evaluate.py Alizarine 2 segmentation\models\synthetic\20220610-0123 7',
     
-    r'python .\evaluate.py Gavet 0 segmentation\models\raw\20220603-0826 9',
-    r'python .\evaluate.py Gavet 1 segmentation\models\raw\20220610-0031 9',
-    r'python .\evaluate.py Gavet 2 segmentation\models\raw\20220610-0038 9',
-    r'python .\evaluate.py Gavet 0 segmentation\models\synthetic\20220610-1033 9',
-    r'python .\evaluate.py Gavet 1 segmentation\models\synthetic\20220610-1110 9',
-    r'python .\evaluate.py Gavet 2 segmentation\models\synthetic\20220610-1309 9',
+    # r'python .\evaluate.py Gavet 0 segmentation\models\raw\20220603-0826 9',
+    # r'python .\evaluate.py Gavet 1 segmentation\models\raw\20220610-0031 9',
+    # r'python .\evaluate.py Gavet 2 segmentation\models\raw\20220610-0038 9',
+    # r'python .\evaluate.py Gavet 0 segmentation\models\synthetic\20220610-1033 9',
+    # r'python .\evaluate.py Gavet 1 segmentation\models\synthetic\20220610-1110 9',
+    # r'python .\evaluate.py Gavet 2 segmentation\models\synthetic\20220610-1309 9',
 
     # r'python .\evaluate.py Rotterdam_1000 0 segmentation\models\raw\20220602-1258\model-22.hdf5 15',
     # r'python .\evaluate.py Rotterdam_1000 1 segmentation\models\raw\20220610-0051\model-25.hdf5 15',
@@ -55,6 +55,18 @@ list_of_commands = [
     # r'python .\evaluate.py Gavet 0 segmentation\models\synthetic\20220610-1033\model-25.hdf5 9',
     # r'python .\evaluate.py Gavet 1 segmentation\models\synthetic\20220610-1110\model-24.hdf5 9',
     # r'python .\evaluate.py Gavet 2 segmentation\models\synthetic\20220610-1309\model-25.hdf5 9',
+    
+    r'python .\evaluate.py Alizarine 0 segmentation\models\synthetic\20220624-1824 7',
+    r'python .\evaluate.py Alizarine 1 segmentation\models\synthetic\20220624-1831 7',
+    r'python .\evaluate.py Alizarine 2 segmentation\models\synthetic\20220624-1838 7',
+    
+    r'python .\evaluate.py Rotterdam_1000 0 segmentation\models\synthetic\20220624-1846 15',
+    r'python .\evaluate.py Rotterdam_1000 1 segmentation\models\synthetic\20220624-1853 15',
+    r'python .\evaluate.py Rotterdam_1000 2 segmentation\models\synthetic\20220624-1901 15',
+    
+    r'python .\evaluate.py Gavet 0 segmentation\models\synthetic\20220624-1908 9',
+    r'python .\evaluate.py Gavet 1 segmentation\models\synthetic\20220624-1916 9',
+    r'python .\evaluate.py Gavet 2 segmentation\models\synthetic\20220624-1923 9',
 ]
 
 for command in list_of_commands:
