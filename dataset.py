@@ -74,6 +74,14 @@ def images_preprocessing(
 
     return np.clip(images, 0, 1)
 
+def dataset_swap_axes(dataset: Tuple):
+    images, gts, rois, markers = [], [], [], []
+    for i in range(len(dataset)):
+        images.append(dataset[i][0])
+        gts.append(dataset[i][1])
+        rois.append(dataset[i][2])
+        markers.append(dataset[i][3])
+    return images, gts, rois, markers
 
 def load_dataset(json_path: str, normalize=True, swapaxes=False, as_numpy = True) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
     """
@@ -146,25 +154,7 @@ def load_dataset(json_path: str, normalize=True, swapaxes=False, as_numpy = True
             for i in range(len(dataset)):
                 a, b = dataset[i]
                 dataset[i] = (a.swapaxes(0, 1), b.swapaxes(0, 1))
-        else:
-            images_a, gts_a, rois_a, markers_a = [], [], [], []
-            images_b, gts_b, rois_b, markers_b = [], [], [], []
-            for k in range(len(dataset)):
-                a, b = dataset[k]
-                for ai in a:
-                    i, g, r, m = ai
-                    images_a.append(i)
-                    gts_a.append(g)
-                    rois_a.append(r)
-                    markers_a.append(m)
-                for bi in b:
-                    i, g, r, m = bi
-                    images_b.append(i)
-                    gts_b.append(g)
-                    rois_b.append(r)
-                    markers_b.append(m)
-                dataset[k] = [(images_a, gts_a, rois_a, markers_a), (images_b, gts_b, rois_b, markers_b)]
-                
+
     return dataset
 
 

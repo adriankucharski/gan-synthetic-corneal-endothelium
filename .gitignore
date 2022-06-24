@@ -10,3 +10,5 @@ logs.txt
 temp.py
 create_animation.py
 /segmentation/
+/result/
+/result_best/
