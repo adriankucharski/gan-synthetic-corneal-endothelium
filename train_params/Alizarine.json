@@ -1,7 +1,7 @@
 {
-    "num_of_data": 2000,
+    "num_of_data": 2500,
     "hexagon_size": [
-        17,
+        18,
         21
     ],
     "batch_size": 100,

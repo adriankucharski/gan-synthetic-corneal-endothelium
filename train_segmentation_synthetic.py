@@ -31,16 +31,14 @@ if __name__ == '__main__':
     all_generators = []
     # Alizerine 0
     generators = [
-        r'generator\models\20220405-2359\model_133.h5',
-        r'generator\models\20220405-2359\model_137.h5',
+        r'generator\models\20220405-2359\model_144.h5',
         r'generator\models\20220405-2359\model_145.h5',
         r'generator\models\20220405-2359\model_146.h5',
-        r'generator\models\20220405-2359\model_149.h5'
+        r'generator\models\20220405-2359\model_147.h5'
     ]
     all_generators.append(generators)
     # Alizerine 1
     generators = [
-        r'generator\models\20220603-1720\model_109.h5',
         r'generator\models\20220603-1720\model_114.h5',
         r'generator\models\20220603-1720\model_120.h5',
         r'generator\models\20220603-1720\model_141.h5',
@@ -49,67 +47,60 @@ if __name__ == '__main__':
     all_generators.append(generators)
     # Alizerine 2
     generators = [
-        r'generator\models\20220603-1850\model_134.h5',
         r'generator\models\20220603-1850\model_137.h5',
         r'generator\models\20220603-1850\model_141.h5',
         r'generator\models\20220603-1850\model_145.h5',
         r'generator\models\20220603-1850\model_147.h5',
     ]
     all_generators.append(generators)
-    # Rotterdam_1000 0
-    generators = [
-        "generator/models/20220623-0916/model_7.h5",
-        "generator/models/20220623-0916/model_15.h5",
-        "generator/models/20220623-0916/model_16.h5",
-        "generator/models/20220623-0916/model_20.h5",
-        "generator/models/20220623-0916/model_68.h5",
-    ]
-    all_generators.append(generators)
-    # Rotterdam_1000 1
-    generators = [
-        r'generator\models\20220609-1841\model_11.h5',
-        r'generator\models\20220609-1841\model_15.h5',
-        r'generator\models\20220609-1841\model_16.h5',
-        r'generator\models\20220609-1841\model_17.h5',
-        r'generator\models\20220609-1841\model_22.h5'
-    ]
-    all_generators.append(generators)
-    # Rotterdam_1000 2
-    generators = [
-        r'generator\models\20220609-2031\model_23.h5',
-        r'generator\models\20220609-2031\model_34.h5',
-        r'generator\models\20220609-2031\model_37.h5',
-        r'generator\models\20220609-2031\model_72.h5',
-        r'generator\models\20220609-2031\model_83.h5',
-    ]
-    all_generators.append(generators)
-    # Gavet 0
-    generators = [
-        r'generator\models\20220429-0021\model_46.h5',
-        r'generator\models\20220429-0021\model_71.h5',
-        r'generator\models\20220429-0021\model_76.h5',
-        r'generator\models\20220429-0021\model_81.h5',
-        r'generator\models\20220429-0021\model_88.h5'
-    ]
-    all_generators.append(generators)
-    # Gavet 1
-    generators = [
-        r'generator\models\20220609-2213\model_46.h5',
-        r'generator\models\20220609-2213\model_68.h5',
-        r'generator\models\20220609-2213\model_76.h5',
-        r'generator\models\20220609-2213\model_97.h5',
-        r'generator\models\20220609-2213\model_99.h5'
-    ]
-    all_generators.append(generators)
-    # Gavet 2
-    generators = [
-        r'generator\models\20220609-2319\model_56.h5',
-        r'generator\models\20220609-2319\model_65.h5',
-        r'generator\models\20220609-2319\model_83.h5',
-        r'generator\models\20220609-2319\model_94.h5',
-        r'generator\models\20220609-2319\model_97.h5'
-    ]
-    all_generators.append(generators)
+    # # Rotterdam_1000 0
+    # generators = [
+    #     "generator/models/20220623-0916/model_15.h5",
+    #     "generator/models/20220623-0916/model_16.h5",
+    #     "generator/models/20220623-0916/model_20.h5",
+    #     "generator/models/20220623-0916/model_68.h5",
+    # ]
+    # all_generators.append(generators)
+    # # Rotterdam_1000 1
+    # generators = [
+    #     r'generator\models\20220609-1841\model_15.h5',
+    #     r'generator\models\20220609-1841\model_16.h5',
+    #     r'generator\models\20220609-1841\model_17.h5',
+    #     r'generator\models\20220609-1841\model_22.h5'
+    # ]
+    # all_generators.append(generators)
+    # # Rotterdam_1000 2
+    # generators = [
+    #     r'generator\models\20220609-2031\model_34.h5',
+    #     r'generator\models\20220609-2031\model_37.h5',
+    #     r'generator\models\20220609-2031\model_72.h5',
+    #     r'generator\models\20220609-2031\model_83.h5',
+    # ]
+    # all_generators.append(generators)
+    # # Gavet 0
+    # generators = [
+    #     r'generator\models\20220429-0021\model_71.h5',
+    #     r'generator\models\20220429-0021\model_76.h5',
+    #     r'generator\models\20220429-0021\model_81.h5',
+    #     r'generator\models\20220429-0021\model_88.h5'
+    # ]
+    # all_generators.append(generators)
+    # # Gavet 1
+    # generators = [
+    #     r'generator\models\20220609-2213\model_68.h5',
+    #     r'generator\models\20220609-2213\model_76.h5',
+    #     r'generator\models\20220609-2213\model_97.h5',
+    #     r'generator\models\20220609-2213\model_99.h5'
+    # ]
+    # all_generators.append(generators)
+    # # Gavet 2
+    # generators = [
+    #     r'generator\models\20220609-2319\model_65.h5',
+    #     r'generator\models\20220609-2319\model_83.h5',
+    #     r'generator\models\20220609-2319\model_94.h5',
+    #     r'generator\models\20220609-2319\model_97.h5'
+    # ]
+    # all_generators.append(generators)
     
     for index, generators in enumerate(all_generators):
         
@@ -162,3 +153,5 @@ if __name__ == '__main__':
         dumb_params(params, 'segmentation/params/synthetic')
         unet.train(25, dataset, validation_data, validation_split=0.10)
         # os.system("shutdown /s /t 60")
+    
+    # os.system("shutdown /s /t 60")

@@ -1,14 +1,15 @@
+import json
+import sys
 from glob import glob
-from skimage import io, filters, morphology
-from skimage.morphology import square
+from skimage import io, morphology
 from scipy.ndimage import gaussian_filter
 import os
 from pathlib import Path
 import numpy as np
-from dataset import DataIterator, HexagonDataIterator
+from dataset import HexagonDataIterator
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import Model, load_model
-from util import add_salt_and_pepper, normalization
+from util import add_salt_and_pepper
 from typing import Tuple, Union
 from skimage import exposure
 from model import dice_loss
@@ -83,8 +84,9 @@ def generate_dataset(generator_path: str, num_of_data: int,
 
 
 class UnetPrediction():
-    def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64, sigma = None):
-        self.model: Model = load_model(model_path, custom_objects={'dice_loss': dice_loss})
+    def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64, sigma=None):
+        self.model: Model = load_model(model_path, custom_objects={
+                                       'dice_loss': dice_loss})
         self.patch_size = patch_size
         self.stride = stride
         self.batch_size = batch_size
@@ -191,22 +193,34 @@ class UnetPrediction():
 
 
 if __name__ == '__main__':
-    preds = []
-    names = []
-    image_path = 'datasets/Rotterdam_1000/images/45R.png'
-    models = list(glob('segmentation/models/synthetic/*')) + list(glob('segmentation/models/raw/*'))
-    for model_path in models:
-        name = Path(model_path).name
-        if any([s in name for s in ['20220531-2329', '20220601-2353']]):
-            model_path = os.path.join(model_path, 'model-25.hdf5')
-            unet_pred = UnetPrediction(model_path,  stride=8, batch_size=128, sigma=0.75)
-            print(str(Path(image_path)))
-            pred = unet_pred.predict(str(Path(image_path)))[0]
-            preds.append(pred)
-            names.append(name)
-
-    print(names)
-    p = np.concatenate(preds, axis=1)
-    plt.imshow(p, 'gray')
-    plt.axis('off')
-    plt.show()
+    args = sys.argv[1:]
+    if len(args) < 4:
+        print('Provide at least four arguments')
+        exit()
+    datasets_names = ['Alizarine', 'Gavet',
+                      'Hard', 'Rotterdam', 'Rotterdam_1000']
+    
+    dataset_path, fold, model_path, stride = args[0:4]
+    
+    assert dataset_path in datasets_names
+    unet_pred = UnetPrediction(model_path,  stride=int(stride), batch_size=128)
+    
+    dataset_path = f'datasets/{dataset_path}/folds.json'
+    with open(dataset_path, "r") as f:
+        folds_json = json.load(f)
+        
+    if 'raw' in model_path:
+        prefix = 'raw'
+    else:
+        prefix = 'synthetic'
+    
+    result_save = Path('./result_image', prefix, folds_json['dataset_name'])
+    print(str(result_save))
+    result_save.mkdir(parents=True, exist_ok=True)
+    
+    parent_path = folds_json['dataset_path']
+    for image in folds_json['folds'][int(fold)]['test']:
+        pr = str(Path(parent_path, 'images', image))
+        ps = str(Path(result_save, image))
+        pred = unet_pred.predict(pr)[0]
+        io.imsave(ps, pred)

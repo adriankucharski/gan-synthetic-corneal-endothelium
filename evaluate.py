@@ -154,7 +154,7 @@ if __name__ == '__main__':
             models_path) else os.path.join(models_path, '*')
 
         print(p, os.path.isfile(models_path))
-        for model_path in glob(p)[10:]:
+        for model_path in glob(p):
             unet = UnetPrediction(
                 model_path, stride=stride, batch_size=batch_size)
             predicted = unet.predict(images)
