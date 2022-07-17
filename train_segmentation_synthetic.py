@@ -30,29 +30,29 @@ def replace_images_with_models(paths: Tuple[str], model_name: str = 'model_{}.h5
 if __name__ == '__main__':
     all_generators = []
     # Alizerine 0
-    generators = [
-        r'generator\models\20220405-2359\model_144.h5',
-        r'generator\models\20220405-2359\model_145.h5',
-        r'generator\models\20220405-2359\model_146.h5',
-        r'generator\models\20220405-2359\model_147.h5'
-    ]
-    all_generators.append(generators)
-    # Alizerine 1
-    generators = [
-        r'generator\models\20220603-1720\model_114.h5',
-        r'generator\models\20220603-1720\model_120.h5',
-        r'generator\models\20220603-1720\model_141.h5',
-        r'generator\models\20220603-1720\model_143.h5'
-    ]
-    all_generators.append(generators)
-    # Alizerine 2
-    generators = [
-        r'generator\models\20220603-1850\model_137.h5',
-        r'generator\models\20220603-1850\model_141.h5',
-        r'generator\models\20220603-1850\model_145.h5',
-        r'generator\models\20220603-1850\model_147.h5',
-    ]
-    all_generators.append(generators)
+    # generators = [
+    #     r'generator\models\20220405-2359\model_144.h5',
+    #     r'generator\models\20220405-2359\model_145.h5',
+    #     r'generator\models\20220405-2359\model_146.h5',
+    #     r'generator\models\20220405-2359\model_147.h5'
+    # ]
+    # all_generators.append(generators)
+    # # Alizerine 1
+    # generators = [
+    #     r'generator\models\20220603-1720\model_114.h5',
+    #     r'generator\models\20220603-1720\model_120.h5',
+    #     r'generator\models\20220603-1720\model_141.h5',
+    #     r'generator\models\20220603-1720\model_143.h5'
+    # ]
+    # all_generators.append(generators)
+    # # Alizerine 2
+    # generators = [
+    #     r'generator\models\20220603-1850\model_137.h5',
+    #     r'generator\models\20220603-1850\model_141.h5',
+    #     r'generator\models\20220603-1850\model_145.h5',
+    #     r'generator\models\20220603-1850\model_147.h5',
+    # ]
+    # all_generators.append(generators)
     # # Rotterdam_1000 0
     # generators = [
     #     "generator/models/20220623-0916/model_15.h5",

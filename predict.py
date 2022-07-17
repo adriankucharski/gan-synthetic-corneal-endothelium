@@ -14,75 +14,6 @@ from typing import Tuple, Union
 from skimage import exposure
 from model import dice_loss
 
-
-def generate_dataset(generator_path: str, num_of_data: int,
-                     batch_size=32,
-                     patch_size=64,
-                     noise_size=(64, 64, 1),
-                     hexagon_size=(17, 21),
-                     neatness_range=(0.55, 0.7),
-                     inv_values=True,
-                     sap_ratio=(0.0, 0.2),
-                     sap_value_range=(0.5, 1.0),
-                     result_gamma_range=(0.25, 1.75),
-                     noise_range=(-1e-3, 1e-3),
-                     keep_edges: float = 1.0,
-                     edges_thickness: int = 1,
-                     remove_edges_ratio: float = 0,
-                     rotate90=True,
-                     rotation_range=(0, 0)
-                     ) -> Tuple[np.ndarray, np.ndarray]:
-    model_generator: Model = load_model(generator_path)
-    hex_it = HexagonDataIterator(
-        batch_size=batch_size,
-        patch_size=patch_size,
-        noise_size=noise_size,
-        inv_values=inv_values,
-        total_patches=num_of_data,
-        hexagon_size=hexagon_size,
-        neatness_range=neatness_range,
-        remove_edges_ratio=remove_edges_ratio,
-        rotation_range=rotation_range
-    )
-
-    mask, image = [], []
-    for h, z in hex_it:
-        salty_h = h
-        if sap_ratio is not None:
-            salty_h = np.array(h)
-            for i in range(len(salty_h)):
-                ratio = np.random.uniform(*sap_ratio)
-                value = np.random.uniform(*sap_value_range)
-                keepe = np.random.choice(
-                    [True, False], p=[keep_edges, 1 - keep_edges])
-                salty_h[i] = add_salt_and_pepper(
-                    salty_h[i], ratio, value, keepe)
-        p = model_generator.predict_on_batch([salty_h, z])
-        if edges_thickness > 1:
-            for i in range(len(h)):
-                func = morphology.erosion if inv_values else morphology.dilation
-                h[i] = func(h[i, ..., 0], morphology.square(
-                    edges_thickness))[..., np.newaxis]
-        mask.extend(h)
-        image.extend(p)
-    mask, image = np.array(mask), np.array(image)
-    image = (image + 1) / 2
-    if result_gamma_range is not None:
-        for i in range(len(image)):
-            rgamma = np.random.uniform(*result_gamma_range)
-            image[i] = exposure.adjust_gamma(image[i], rgamma)
-    if noise_range is not None:
-        r = np.random.uniform(*noise_range, size=image.shape)
-        image = image + r
-    if inv_values:
-        mask = 1 - mask
-    if rotate90:
-        for i in range(len(image)):
-            k = np.random.randint(0, 4)
-            image[i], mask[i] = np.rot90(image[i], k=k), np.rot90(mask[i], k=k)
-    return np.clip(image, 0, 1), mask
-
-
 class UnetPrediction():
     def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64, sigma=None):
         self.model: Model = load_model(model_path, custom_objects={
@@ -191,6 +122,28 @@ class UnetPrediction():
             if isinstance(data[0], np.ndarray):
                 return self._predict_from_array(data, verbose)
 
+class GANsPrediction(UnetPrediction):
+    def __init__(self, model_path: str, patch_size: int = 64, stride: int = 4, batch_size: int = 64, sigma=None):
+        self.model: Model = load_model(model_path)
+        self.patch_size = patch_size
+        self.stride = stride
+        self.batch_size = batch_size
+    
+    def _predict_from_array(self, data: Tuple[np.ndarray], verbose=0) -> Tuple[np.ndarray]:
+        predicted = []
+        for idx in range(len(data)):
+            height, width = data[idx].shape[:2]
+            img = self._add_outline(data[idx])
+            new_height, new_width = img.shape[:2]
+            patches = self._get_patches(img)
+            predictions = self.model.predict(
+                patches, batch_size=self.batch_size, verbose=verbose)
+            pred_img = self._build_img_from_patches(
+                predictions, new_height, new_width)
+
+            pred_img = pred_img[:height, :width]
+            predicted.append(pred_img)
+        return predicted
 
 if __name__ == '__main__':
     args = sys.argv[1:]
@@ -203,7 +156,7 @@ if __name__ == '__main__':
     dataset_path, fold, model_path, stride = args[0:4]
     
     assert dataset_path in datasets_names
-    unet_pred = UnetPrediction(model_path,  stride=int(stride), batch_size=128)
+    unet_pred = UnetPrediction(model_path, stride=int(stride), batch_size=128)
     
     dataset_path = f'datasets/{dataset_path}/folds.json'
     with open(dataset_path, "r") as f:
