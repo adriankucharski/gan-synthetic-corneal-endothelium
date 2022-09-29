@@ -1,16 +1,12 @@
 import json
 import sys
-from glob import glob
-from skimage import io, morphology
-from scipy.ndimage import gaussian_filter
-import os
+from skimage import io
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import Model, load_model
 from util import add_salt_and_pepper
-from typing import Tuple, Union
-from skimage import exposure
+from typing import Tuple
 from predict import UnetPrediction
 
 class GANsPrediction(UnetPrediction):

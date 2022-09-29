@@ -8,7 +8,6 @@ import datetime
 import json
 import os
 from datetime import timedelta
-from glob import glob
 from pathlib import Path
 from timeit import default_timer as timer
 from typing import Callable, Tuple
