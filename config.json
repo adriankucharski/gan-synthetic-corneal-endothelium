@@ -10,7 +10,7 @@
       "random_shift": 8
     },
     "training_params": {
-      "dataset": "datasets/Alizarine/folds.json",
+      "dataset": "extra_data/Alizarine/folds.json",
       "fold": 0,
       "patch_per_image": 512,
       "g_lr": 1e-5,
@@ -21,7 +21,7 @@
   },
   "unet.synthetic.training": {
     "dataset_meta": {
-      "path": "datasets/Alizarine/folds.json",
+      "path": "extra_data/Alizarine/folds.json",
       "fold": 0,
       "as_numpy": false
     },
@@ -45,15 +45,15 @@
       "as_numpy": false
     },
     "generators": [
-      "generator/models/20220405-2359/model_144.h5",
-      "generator/models/20220405-2359/model_145.h5",
-      "generator/models/20220405-2359/model_146.h5",
-      "generator/models/20220405-2359/model_147.h5"
+      "extra_data/generators/model_1.h5",
+      "extra_data/generators/model_2.h5",
+      "extra_data/generators/model_3.h5",
+      "extra_data/generators/model_4.h5"
     ]
   },
   "unet.raw.training": {
     "dataset_meta": {
-      "path": "datasets/Alizarine/folds.json",
+      "path": "extra_data/Alizarine/folds.json",
       "fold": 0,
       "as_numpy": false,
       "patch_per_image": 500
