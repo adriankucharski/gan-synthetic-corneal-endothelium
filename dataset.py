@@ -204,7 +204,7 @@ def generate_dataset_from_generators(generators: str, params: GeneratorParams):
         else:
             synthetic_image = np.concatenate([synthetic_image, image], axis=0)
             synthetic_mask = np.concatenate([synthetic_mask, mask], axis=0)
-    return (synthetic_image, synthetic_mask)
+    return (synthetic_mask, synthetic_image)
 
 
 def generate_dataset(

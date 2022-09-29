@@ -42,7 +42,7 @@ if __name__ == "__main__":
     preprocesing = config["preprocesing"]
     hexagon_generator_params = config["hexagon_generator_params"]
 
-    synthetic_images, synthetic_masks = generate_dataset_from_generators(
+    synthetic_masks, synthetic_images = generate_dataset_from_generators(
         generators, hexagon_generator_params
     )
 

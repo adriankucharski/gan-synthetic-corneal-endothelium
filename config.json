@@ -21,9 +21,9 @@
   },
   "unet.synthetic.training": {
     "dataset_meta": {
-        "path": "datasets/Alizarine/folds.json",
-        "fold": 0,
-        "as_numpy": false
+      "path": "datasets/Alizarine/folds.json",
+      "fold": 0,
+      "as_numpy": false
     },
     "hexagon_generator_params": {
       "num_of_data": 2500,
@@ -38,11 +38,11 @@
       "inv_values": true
     },
     "preprocesing": {
-        "gamma_range": [0.5, 1.0],
-        "rotate90": true,
-        "noise_range":  [-1e-2, 1e-2],
-        "gaussian_sigma": 1.0,
-        "as_numpy": false
+      "gamma_range": [0.5, 1.0],
+      "rotate90": true,
+      "noise_range": [-1e-2, 1e-2],
+      "gaussian_sigma": 1.0,
+      "as_numpy": false
     },
     "generators": [
       "generator/models/20220405-2359/model_144.h5",
@@ -50,5 +50,20 @@
       "generator/models/20220405-2359/model_146.h5",
       "generator/models/20220405-2359/model_147.h5"
     ]
+  },
+  "unet.raw.training": {
+    "dataset_meta": {
+      "path": "datasets/Alizarine/folds.json",
+      "fold": 0,
+      "as_numpy": false,
+      "patch_per_image": 500
+    },
+    "preprocesing": {
+      "gamma_range": [0.5, 1.0],
+      "rotate90": true,
+      "noise_range": null,
+      "gaussian_sigma": 1.0,
+      "as_numpy": false
+    }
   }
 }
