@@ -1,17 +1,13 @@
 import json
 import sys
 from glob import glob
-from skimage import io, morphology
+from skimage import io
 from scipy.ndimage import gaussian_filter
 import os
 from pathlib import Path
 import numpy as np
-from dataset import HexagonDataIterator
-import matplotlib.pyplot as plt
 from tensorflow.keras.models import Model, load_model
-from util import add_salt_and_pepper
 from typing import Tuple, Union
-from skimage import exposure
 from model import dice_loss
 
 class UnetPrediction():

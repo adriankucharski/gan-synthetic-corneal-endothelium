@@ -6,8 +6,6 @@ import cv2
 import multiprocessing
 import itertools
 
-from util import cell_stat
-
 
 def closest(points: np.ndarray, xy: np.ndarray, k=1) -> np.ndarray:
     # distance = np.linalg.norm(points-xy, axis=1)
