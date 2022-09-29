@@ -1,0 +1,54 @@
+{
+  "gan.training": {
+    "hexagon_params": {
+      "hexagon_size": [17, 21],
+      "neatness_range": [0.65, 0.8],
+      "normalize": false,
+      "inv_values": true,
+      "remove_edges_ratio": 0.1,
+      "rotation_range": [-60, 60],
+      "random_shift": 8
+    },
+    "training_params": {
+      "dataset": "datasets/Alizarine/folds.json",
+      "fold": 0,
+      "patch_per_image": 512,
+      "g_lr": 1e-5,
+      "gan_lr": 2e-4,
+      "d_lr": 2e-4,
+      "as_numpy": false
+    }
+  },
+  "unet.synthetic.training": {
+    "dataset_meta": {
+        "path": "datasets/Alizarine/folds.json",
+        "fold": 0,
+        "as_numpy": false
+    },
+    "hexagon_generator_params": {
+      "num_of_data": 2500,
+      "hexagon_size": [18, 21],
+      "batch_size": 100,
+      "sap_ratio": [0.0, 0.1],
+      "neatness_range": [0.6, 0.8],
+      "sap_value_range": [0.2, 0.8],
+      "keep_edges": 0.8,
+      "remove_edges_ratio": 0.05,
+      "rotation_range": [-60, 60],
+      "inv_values": true
+    },
+    "preprocesing": {
+        "gamma_range": [0.5, 1.0],
+        "rotate90": true,
+        "noise_range":  [-1e-2, 1e-2],
+        "gaussian_sigma": 1.0,
+        "as_numpy": false
+    },
+    "generators": [
+      "generator/models/20220405-2359/model_144.h5",
+      "generator/models/20220405-2359/model_145.h5",
+      "generator/models/20220405-2359/model_146.h5",
+      "generator/models/20220405-2359/model_147.h5"
+    ]
+  }
+}

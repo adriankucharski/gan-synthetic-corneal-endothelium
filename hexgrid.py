@@ -17,11 +17,10 @@ def closest(points: np.ndarray, xy: np.ndarray, k=1) -> np.ndarray:
 
 def rotate(p, origin=(0, 0), degrees=0):
     angle = np.deg2rad(degrees)
-    R = np.array([[np.cos(angle), -np.sin(angle)],
-                  [np.sin(angle),  np.cos(angle)]])
+    R = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
     o = np.atleast_2d(origin)
     p = np.atleast_2d(p)
-    return np.squeeze((R @ (p.T-o.T) + o.T).T).astype('int')
+    return np.squeeze((R @ (p.T - o.T) + o.T).T).astype("int")
 
 
 def grid_create_hexagons(
@@ -32,7 +31,7 @@ def grid_create_hexagons(
     random_shift: int = None,
     seed: int = None,
     remove_edges_ratio=0.0,
-    rotation=None
+    rotation=None,
 ) -> np.ndarray:
     if seed is not None:
         np.random.seed(seed=seed)
@@ -58,25 +57,27 @@ def grid_create_hexagons(
             y4 = y1 + hex_l1
             points.extend([[x1, y1], [x2, y2], [x3, y3], [x4, y4]])
 
-    points = np.array(points, dtype='int')
+    points = np.array(points, dtype="int")
     nearest = []
     for i in range(len(points)):
         nearest.append(closest(points, points[i], 4))
 
     if rand_localize > 0:
-        points += np.random.randint(-rand_localize //
-                                    2, rand_localize//2, (len(points), 2))
+        points += np.random.randint(
+            -rand_localize // 2, rand_localize // 2, (len(points), 2)
+        )
 
     if random_shift is not None and random_shift > 0:
         points += np.random.randint(0, random_shift)
 
     grid = np.zeros((width, height, 1))
 
-    remove_p = np.random.choice([True, False], p=(
-        remove_edges_ratio, 1 - remove_edges_ratio), size=len(nearest))
+    remove_p = np.random.choice(
+        [True, False], p=(remove_edges_ratio, 1 - remove_edges_ratio), size=len(nearest)
+    )
 
     if rotation is not None and rotation != 0:
-        points = rotate(points, (width//2, height//2), rotation)
+        points = rotate(points, (width // 2, height // 2), rotation)
 
     for i, ips in enumerate(nearest):
         x, y = points[i]
@@ -86,15 +87,16 @@ def grid_create_hexagons(
     return grid
 
 
-def generate_hexagons(num: int,
-                      hex_size: Tuple[int, int] = (16, 20),
-                      neatness: float = 0.7,
-                      width: int = 64,
-                      height: int = 64,
-                      random_shift: int = 6,
-                      remove_edges_ratio=0.0,
-                      rotation_range=(0, 0)
-                      ) -> np.ndarray:
+def generate_hexagons(
+    num: int,
+    hex_size: Tuple[int, int] = (16, 20),
+    neatness: float = 0.7,
+    width: int = 64,
+    height: int = 64,
+    random_shift: int = 6,
+    remove_edges_ratio=0.0,
+    rotation_range=(0, 0),
+) -> np.ndarray:
     smin, smax = hex_size
     random_hex_size = np.random.uniform(smin, smax, num)
 
@@ -103,27 +105,31 @@ def generate_hexagons(num: int,
     rotation_range = np.random.uniform(*rotation_range, num)
 
     args = zip(
-        random_hex_size, itertools.repeat(neatness), itertools.repeat(width),
-        itertools.repeat(height), itertools.repeat(random_shift),
-        itertools.repeat(None), itertools.repeat(remove_edges_ratio),
-        rotation_range
+        random_hex_size,
+        itertools.repeat(neatness),
+        itertools.repeat(width),
+        itertools.repeat(height),
+        itertools.repeat(random_shift),
+        itertools.repeat(None),
+        itertools.repeat(remove_edges_ratio),
+        rotation_range,
     )
     pool = multiprocessing.Pool(multiprocessing.cpu_count() // 2)
     hexagons = pool.starmap(grid_create_hexagons, args)
     return np.array(hexagons)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     while True:
         params = {
-            'hex_size': np.random.uniform(17, 27),
-            'neatness': np.random.uniform(0.70, 0.80),
-            'random_shift': 1,
-            'remove_edges_ratio': 0.02,
-            'rotation': np.random.uniform(-60, 60)
+            "hex_size": np.random.uniform(17, 27),
+            "neatness": np.random.uniform(0.70, 0.80),
+            "random_shift": 1,
+            "remove_edges_ratio": 0.02,
+            "rotation": np.random.uniform(-60, 60),
         }
         h = grid_create_hexagons(**params)
-        print(params['hex_size'])
-        plt.imshow(h, 'gray')
+        print(params["hex_size"])
+        plt.imshow(h, "gray")
         plt.show()
