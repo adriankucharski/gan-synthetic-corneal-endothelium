@@ -10,7 +10,7 @@
       "random_shift": 8
     },
     "training_params": {
-      "dataset": "extra_data/Alizarine/folds.json",
+      "dataset": "./extra_data/Alizarine/folds.json",
       "fold": 0,
       "patch_per_image": 512,
       "g_lr": 1e-5,
@@ -21,7 +21,7 @@
   },
   "unet.synthetic.training": {
     "dataset_meta": {
-      "path": "extra_data/Alizarine/folds.json",
+      "path": "./extra_data/Alizarine/folds.json",
       "fold": 0,
       "as_numpy": false
     },
@@ -45,15 +45,15 @@
       "as_numpy": false
     },
     "generators": [
-      "extra_data/generators/model_1.h5",
-      "extra_data/generators/model_2.h5",
-      "extra_data/generators/model_3.h5",
-      "extra_data/generators/model_4.h5"
+      "./extra_data/generators/model_1.h5",
+      "./extra_data/generators/model_2.h5",
+      "./extra_data/generators/model_3.h5",
+      "./extra_data/generators/model_4.h5"
     ]
   },
   "unet.raw.training": {
     "dataset_meta": {
-      "path": "extra_data/Alizarine/folds.json",
+      "path": "./extra_data/Alizarine/folds.json",
       "fold": 0,
       "as_numpy": false,
       "patch_per_image": 500
@@ -65,5 +65,12 @@
       "gaussian_sigma": 1.0,
       "as_numpy": false
     }
+  },
+  "unet.predict": {
+    "dataset_path": "./extra_data/Alizarine/folds.json",
+    "prediction_path_save": "./segmented_images",
+    "fold": 0,
+    "stride": 4,
+    "model_path": "./extra_data/unets/model_raw.hdf5"
   }
 }
