@@ -1,13 +1,11 @@
 """
-Train Segmentation Unet
+Train Segmentation Unet with synthetic data
 
 @author: Adrian Kucharski
 """
 import json
 import os
 from typing import Tuple
-import numpy as np
-import matplotlib.pyplot as plt
 from dataset import (
     generate_dataset_from_generators,
     images_preprocessing,

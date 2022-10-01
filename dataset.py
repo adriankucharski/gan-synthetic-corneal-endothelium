@@ -7,11 +7,8 @@ import json
 import os
 from typing import Tuple, Union
 
-import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from matplotlib import pyplot as plt
 from skimage import exposure, io, morphology, transform
 from tensorflow.keras.models import Model, load_model
 from skimage import filters

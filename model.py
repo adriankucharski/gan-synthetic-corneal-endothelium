@@ -1,5 +1,5 @@
 """
-Colorize GAN architecture.
+GAN architecture and UNet segmentation architecture
 @author: Adrian Kucharski
 """
 import datetime
@@ -11,7 +11,6 @@ import numpy as np
 import tensorflow as tf
 from skimage import io
 from tensorflow.keras.layers import (
-    Activation,
     BatchNormalization,
     GaussianDropout,
     Concatenate,

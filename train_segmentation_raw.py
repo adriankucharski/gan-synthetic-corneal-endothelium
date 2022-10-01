@@ -1,11 +1,9 @@
 """
-Train Segmentation Unet
+Train Segmentation UNet with raw data
 
 @author: Adrian Kucharski
 """
 import os
-
-from matplotlib import pyplot as plt
 
 from dataset import images_preprocessing, load_dataset, DataIterator
 from model import SegmentationUnet

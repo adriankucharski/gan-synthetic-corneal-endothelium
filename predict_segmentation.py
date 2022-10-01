@@ -1,5 +1,10 @@
+"""
+UNet patch-based prediction
+Based on predict.py from https://github.com/afabijanska/CornealEndothelium
+@author: Adrian Kucharski
+"""
+
 import json
-import sys
 from glob import glob
 from skimage import io
 from scipy.ndimage import gaussian_filter
