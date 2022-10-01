@@ -1,6 +1,10 @@
+"""
+Hexagon Mosaic Generator
+@author: Adrian Kucharski
+"""
+
 import math
 from typing import Tuple
-from matplotlib import pyplot as plt
 import numpy as np
 import cv2
 import multiprocessing
@@ -114,22 +118,7 @@ def generate_hexagons(
         itertools.repeat(remove_edges_ratio),
         rotation_range,
     )
+    # multi-thread approach
     pool = multiprocessing.Pool(multiprocessing.cpu_count() // 2)
     hexagons = pool.starmap(grid_create_hexagons, args)
     return np.array(hexagons)
-
-
-if __name__ == "__main__":
-
-    while True:
-        params = {
-            "hex_size": np.random.uniform(17, 27),
-            "neatness": np.random.uniform(0.70, 0.80),
-            "random_shift": 1,
-            "remove_edges_ratio": 0.02,
-            "rotation": np.random.uniform(-60, 60),
-        }
-        h = grid_create_hexagons(**params)
-        print(params["hex_size"])
-        plt.imshow(h, "gray")
-        plt.show()

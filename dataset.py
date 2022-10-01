@@ -12,12 +12,11 @@ import tensorflow as tf
 from skimage import exposure, io, morphology, transform
 from tensorflow.keras.models import Model, load_model
 from skimage import filters
-from hexgrid import generate_hexagons, grid_create_hexagons
+from hexgrid import generate_hexagons
 from util import (
     add_salt_and_pepper,
     cell_stat,
     nonzeros_object_to_centroids,
-    normalization,
 )
 from typing import NamedTuple
 
@@ -76,16 +75,6 @@ def images_preprocessing(
         return np.clip(images, 0, 1), masks
 
     return np.clip(images, 0, 1)
-
-
-def dataset_swap_axes(dataset: Tuple):
-    images, gts, rois, markers = [], [], [], []
-    for i in range(len(dataset)):
-        images.append(dataset[i][0])
-        gts.append(dataset[i][1])
-        rois.append(dataset[i][2])
-        markers.append(dataset[i][3])
-    return images, gts, rois, markers
 
 
 def load_dataset(
@@ -191,10 +180,12 @@ def load_dataset(
     return dataset
 
 
-def generate_dataset_from_generators(generators: str, params: GeneratorParams):
+def generate_dataset_from_generators(
+    generators_path: Tuple[str], params: GeneratorParams
+):
     synthetic_image, synthetic_mask = None, None
-    for generator in generators:
-        image, mask = generate_dataset(generator, **params)
+    for generator_path in generators_path:
+        image, mask = generate_dataset(generator_path, **params)
         if synthetic_mask is None and synthetic_image is None:
             synthetic_image = image
             synthetic_mask = mask
@@ -327,7 +318,7 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
 
     def __len__(self) -> int:
         "Denotes the number of batches per epoch"
-        return len(self.h) // self.batch_size
+        return (len(self.h) // self.batch_size) or 1
 
     def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
         "Generate one batch of data"
@@ -433,94 +424,3 @@ class DataIterator(tf.keras.utils.Sequence):
     def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
         "self.mask, self.image"
         return self.mask, self.image
-
-
-class HexagonDataGenerator:
-    def __init__(
-        self,
-        generator_model_path: str,
-        batch_size: int = 256,
-        hex_size: Tuple[float, float] = (17, 23),
-        neatness_range: Tuple[float, float] = (0.575, 0.7),
-        patch_size: int = 64,
-        random_shift_range: Tuple[int, int] = (1, 10),
-        sap_ratio_range: Tuple[float, float] = (0.0, 0.125),
-        salt_value_range: Tuple[float, float] = (0.5, 1.0),
-        keep_edges_tf_ratio: Tuple[float, float] = (0.5, 0.5),
-    ):
-        self.model: Model = load_model(generator_model_path)
-        self.batch_size = batch_size
-        self.hex_size_min, self.hex_size_max = hex_size
-        self.neatness_range_min, self.neatness_range_max = neatness_range
-        self.patch_size = patch_size
-        self.random_shift_range_min, self.random_shift_range_max = random_shift_range
-        self.sap_ratio_range_min, self.sap_ratio_range_max = sap_ratio_range
-        self.salt_value_range_min, self.salt_value_range_max = salt_value_range
-        (
-            self.keep_edges_tf_ratio_false,
-            self.keep_edges_tf_ratio_true,
-        ) = keep_edges_tf_ratio
-
-    def _get_random_samples(self):
-        hex_size = np.random.uniform(
-            self.hex_size_min, self.hex_size_max, size=self.batch_size
-        )
-        neatness = np.random.uniform(
-            self.neatness_range_min, self.neatness_range_max, size=self.batch_size
-        )
-        random_shift = np.random.randint(
-            self.random_shift_range_min,
-            self.random_shift_range_max,
-            size=self.batch_size,
-        )
-        sap_ratio = np.random.uniform(
-            self.sap_ratio_range_min, self.sap_ratio_range_max, size=self.batch_size
-        )
-        salt_value = np.random.uniform(
-            self.salt_value_range_min, self.salt_value_range_max, size=self.batch_size
-        )
-        keep_edges = np.random.choice(
-            [False, True],
-            p=[self.keep_edges_tf_ratio_false, self.keep_edges_tf_ratio_true],
-            size=self.batch_size,
-        )
-
-        data = []
-        for i in range(self.batch_size):
-            hexagon = grid_create_hexagons(
-                hex_size[i],
-                neatness[i],
-                self.patch_size,
-                self.patch_size,
-                random_shift[i],
-            )[np.newaxis, ...]
-            salted_hexagon = add_salt_and_pepper(
-                hexagon, sap_ratio[i], salt_value[i], keep_edges[i]
-            )
-            z = np.random.normal(size=hexagon.shape)
-            data.append(np.concatenate([salted_hexagon, z, hexagon], axis=0))
-        data = np.array(data)
-        generated_images = self.model.predict_on_batch(
-            [data[:, 0, ...], data[:, 1, ...]]
-        )
-        return data[:, 2, ...], normalization(generated_images)
-
-    def __iter__(self):
-        self.n = 0
-        self.samples_x, self.samples_y = self._get_random_samples()
-        return self
-
-    def __next__(self):
-        if self.n < self.batch_size:
-            self.n += 1
-            return self.samples_x[self.n - 1], self.samples_y[self.n - 1]
-        self.__iter__()
-        return self.__next__()
-
-
-if __name__ == "__main__":
-    train, test = load_dataset("datasets/Rotterdam_1000/folds.json", as_numpy=False)[0]
-
-    # print(time_measure(lambda: [y for y in zip(range(1000), gen)]))
-    for imga in train:
-        print(len(imga))
