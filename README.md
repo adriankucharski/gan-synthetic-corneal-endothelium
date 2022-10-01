@@ -15,7 +15,7 @@ Code was tested on Windows 10 64-bit with Python 3.9.6, and TensorFlow 2.9.1. Be
 <pre><code>
 {
   <b>"generator_path"</b> - Path to a trained generator
-  <b>"path_to_save"</b> - Path to save generated mask-image pair
+  <b>"path_to_save"</b> - Path to save generated mask-image pairs
   <b>"hexagon_generator_params"</b> - Hexagons parameters
   {
     <b>"num_of_data"</b> - The number of generated images
