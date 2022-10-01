@@ -6,7 +6,6 @@ Dataset Generator with GAN Generator model
 import json
 from skimage import io
 from pathlib import Path
-import matplotlib.pyplot as plt
 from dataset import generate_dataset_from_generators
 
 if __name__ == "__main__":
