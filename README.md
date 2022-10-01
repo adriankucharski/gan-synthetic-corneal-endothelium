@@ -28,7 +28,7 @@ Code was tested on Windows 10 64-bit with Python 3.9.6, and TensorFlow 2.9.1. Be
     <b>"sap_ratio"</b> - A pair of two numbers (default [0.0, 0.1]) from 0 to 1. 
         Add a salt (with a value from <b>sap_value_range</b>) to generated mosaic hexagon images before passing it to a trained generator. 
         It adds noise to data ([0.0, 0.1] means - make up to 10% of pixels to have a value from <b>sap_value_range</b>) and makes generated images more realistic.
-    <b>"sap_value_range"</b>: A pair of two numbers (default [0.2, 0.8]) from 0 to 1.
+    <b>"sap_value_range"</b> - A pair of two numbers (default [0.2, 0.8]) from 0 to 1.
         Related to the <b>"sap_ratio"</b>.
     <b>"keep_edges"</b> - The number from 0 to 1 (default 0.8). 
         This parameter determines how many (in %) pixels of edges won't be affected by the salt.
