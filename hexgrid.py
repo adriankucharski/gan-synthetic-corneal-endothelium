@@ -3,8 +3,10 @@ Hexagon Mosaic Generator
 @author: Adrian Kucharski
 """
 
+from skimage import io
 import math
 from typing import Tuple
+from matplotlib import pyplot as plt
 import numpy as np
 import cv2
 import multiprocessing
@@ -122,3 +124,21 @@ def generate_hexagons(
     pool = multiprocessing.Pool(multiprocessing.cpu_count() // 2)
     hexagons = pool.starmap(grid_create_hexagons, args)
     return np.array(hexagons)
+
+if __name__ == "__main__":
+    params = [
+        (17, 0.775, 0.1, 0),
+        (19, 0.85, 0, 0),
+        (21, 0.925, 0, 45),
+        (21, 0.925, 0, 0),
+        (23, 0.85, 0, 0),
+        (25, 0.775, 0, 0),
+              ]
+
+    seed = 1
+    hexagons = []
+    i = 0
+    for (s, n, r, rot) in params:
+        i += 1
+        h = grid_create_hexagons(s, n, seed=seed, remove_edges_ratio=r, rotation=rot)
+        io.imsave(f'{i}.png', h)

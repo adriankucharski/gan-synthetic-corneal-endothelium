@@ -11,7 +11,7 @@ Code was tested on Windows 10 64-bit with Python 3.9.6, and TensorFlow 2.9.1. Be
 
 ## Config files
 
-### gan_patch_generator_config.json
+### config.json - gan.patch.generator
 <pre><code>
 {
   <b>"generator_path"</b> - Path to a trained generator
@@ -43,3 +43,6 @@ Code was tested on Windows 10 64-bit with Python 3.9.6, and TensorFlow 2.9.1. Be
   }
 }
 </code></pre>
+
+### config.json
+<pre><code>

@@ -9,8 +9,8 @@ from pathlib import Path
 from dataset import generate_dataset_from_generators
 
 if __name__ == "__main__":
-    with open('gan_patch_generator_config.json') as config_file:
-        config = json.load(config_file)
+    with open('config.json') as config_file:
+        config = json.load(config_file)['gan.patch.generator']
     
     synthetic_masks, synthetic_images = generate_dataset_from_generators(
         [config['generator_path']], config['hexagon_generator_params']
