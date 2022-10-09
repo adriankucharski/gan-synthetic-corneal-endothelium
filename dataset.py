@@ -12,7 +12,7 @@ import tensorflow as tf
 from skimage import exposure, io, morphology, transform
 from tensorflow.keras.models import Model, load_model
 from skimage import filters
-from hexgrid import generate_hexagons
+from mosaic import generate_hexagons
 from util import (
     add_salt_and_pepper,
     cell_stat,
@@ -28,7 +28,7 @@ class GeneratorParams(NamedTuple):
     batch_size: int = 32
     patch_size: int = 64
     noise_size: Tuple[int, int, int] = (64, 64, 1)
-    hexagon_size: Tuple[int, int] = (17, 21)
+    hexagon_height: Tuple[int, int] = (17, 21)
     neatness_range: Tuple[float, float] = (0.55, 0.7)
     inv_values: bool = True
     sap_ratio: Tuple[float, float] = (0.0, 0.2)
@@ -201,7 +201,7 @@ def generate_dataset(
     batch_size=32,
     patch_size=64,
     noise_size=(64, 64, 1),
-    hexagon_size=(17, 21),
+    hexagon_height=(17, 21),
     neatness_range=(0.55, 0.7),
     inv_values=True,
     sap_ratio=(0.0, 0.2),
@@ -218,7 +218,7 @@ def generate_dataset(
         noise_size=noise_size,
         inv_values=inv_values,
         total_patches=num_of_data,
-        hexagon_size=hexagon_size,
+        hexagon_height=hexagon_height,
         neatness_range=neatness_range,
         remove_edges_ratio=remove_edges_ratio,
         rotation_range=rotation_range,
@@ -292,7 +292,7 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         patch_size=64,
         total_patches=32 * 24 * 30,
         noise_size=(64, 64, 1),
-        hexagon_size=(17, 21),
+        hexagon_height=(17, 21),
         neatness_range=(0.55, 0.70),
         normalize=False,
         inv_values=True,
@@ -307,7 +307,7 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         self.patch_size = patch_size
         self.total_patches = total_patches
         self.noise_size = noise_size
-        self.hexagon_size = hexagon_size
+        self.hexagon_height = hexagon_height
         self.neatness_range = neatness_range
         self.normalize = normalize
         self.inv_values = inv_values
@@ -333,7 +333,7 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
         neatness = np.random.uniform(*self.neatness_range)
         self.h = generate_hexagons(
             self.total_patches,
-            self.hexagon_size,
+            self.hexagon_height,
             neatness,
             random_shift=self.random_shift,
             remove_edges_ratio=self.remove_edges_ratio,

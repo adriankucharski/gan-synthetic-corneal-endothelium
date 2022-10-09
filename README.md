@@ -20,7 +20,7 @@ Code was tested on Windows 10 64-bit with Python 3.9.6, and TensorFlow 2.9.1. Be
   {
     <b>"num_of_data"</b> - The number of generated images
     <b>"batch_size"</b> - Batch size
-    <b>"hexagon_size"</b> - A pair of two numbers (default [18, 21]). 
+    <b>"hexagon_height"</b> - A pair of two numbers (default [18, 21]). 
         This parameter determines the height of a generated hexagon (a corneal endothelium cell).
     <b>"neatness_range"</b> A pair of two numbers (default [0.6, 0.8]) from 0 to 1. 
         This parameter determines the deformation of generated mosaic hexagons.

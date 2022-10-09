@@ -240,7 +240,7 @@ class GAN:
         save_per_epochs=5,
         log_per_steps=5,
         hexagon_params={
-            "hexagon_size": (17, 21),
+            "hexagon_height": (17, 21),
             "neatness_range": (0.6, 0.75),
             "normalize": False,
             "inv_values": True,

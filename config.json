@@ -5,7 +5,7 @@
     "hexagon_generator_params": {
       "num_of_data": 5,
       "batch_size": 5,
-      "hexagon_size": [18, 21],
+      "hexagon_height": [18, 21],
       "neatness_range": [0.6, 0.8],
       "sap_ratio": [0.0, 0.1],
       "sap_value_range": [0.2, 0.8],
@@ -17,7 +17,7 @@
   },
   "gan.training": {
     "hexagon_params": {
-      "hexagon_size": [17, 21],
+      "hexagon_height": [17, 21],
       "neatness_range": [0.65, 0.8],
       "normalize": false,
       "inv_values": true,
@@ -43,7 +43,7 @@
     },
     "hexagon_generator_params": {
       "num_of_data": 2500,
-      "hexagon_size": [18, 21],
+      "hexagon_height": [18, 21],
       "batch_size": 100,
       "sap_ratio": [0.0, 0.1],
       "neatness_range": [0.6, 0.8],
