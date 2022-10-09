@@ -35,6 +35,8 @@ if __name__ == "__main__":
     with open("config.json") as config_file:
         config = json.load(config_file)["unet.synthetic.training"]
 
+    epochs = int(config["epochs"])
+    validation_split = config["validation_split"]
     generators = config["generators"]
     dataset_meta = config["dataset_meta"]
     preprocesing = config["preprocesing"]
@@ -65,4 +67,4 @@ if __name__ == "__main__":
         model_path_save="segmentation/models/synthetic",
     )
     dumb_params(config, "segmentation/params/synthetic")
-    unet.train(25, dataset, validation_data, validation_split=0.10)
+    unet.train(epochs, dataset, validation_data, validation_split=validation_split)

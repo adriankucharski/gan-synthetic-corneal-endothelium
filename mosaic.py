@@ -135,13 +135,3 @@ def generate_hexagons(
     pool = multiprocessing.Pool(multiprocessing.cpu_count() // 2)
     hexagons = pool.starmap(grid_create_hexagons_mosaic, args)
     return np.array(hexagons)
-
-
-if __name__ == "__main__":
-    w = 4**4
-    h = 4**4
-    for i in [15, 30, 45, 60, 75, 90]:
-        a = grid_create_hexagons_mosaic(17, 1, w, h, rotation=i, side_thickness=1)
-        plt.imshow(a, "gray")
-        print(w, h)
-        plt.show()

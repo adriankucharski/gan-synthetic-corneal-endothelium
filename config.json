@@ -36,6 +36,8 @@
     }
   },
   "unet.synthetic.training": {
+    "epochs": 25,
+    "validation_split": 0.10,
     "dataset_meta": {
       "path": "./extra_data/Alizarine/folds.json",
       "fold": 0,
@@ -68,6 +70,8 @@
     ]
   },
   "unet.raw.training": {
+    "epochs": 25,
+    "validation_split": 0.10,
     "dataset_meta": {
       "path": "./extra_data/Alizarine/folds.json",
       "fold": 0,

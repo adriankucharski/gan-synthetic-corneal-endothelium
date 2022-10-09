@@ -20,6 +20,8 @@ if __name__ == "__main__":
 
     dataset_meta = config["dataset_meta"]
     preprocesing = config["preprocesing"]
+    epochs = int(config["epochs"])
+    validation_split = config["validation_split"]
 
     train, test = load_dataset(
         json_path=dataset_meta["path"],
@@ -48,5 +50,5 @@ if __name__ == "__main__":
         log_path_save="segmentation/logs", model_path_save="segmentation/models/raw"
     )
     dumb_params(config, "segmentation/params/raw")
-    unet.train(25, dataset, validation_data, validation_split=0.10)
+    unet.train(epochs, dataset, validation_data, validation_split=validation_split)
     # os.system("shutdown /s /t 60")
