@@ -39,6 +39,16 @@ class GeneratorParams(NamedTuple):
     rotation_range: Tuple[float, float] = (0, 0)
 
 
+def fft_corrupt_image(im: np.ndarray, corruption: float = 0.05):
+    assert 0 <= corruption < 1
+    imfft = np.fft.fft2(im)
+    imcfft = imfft * np.random.choice(
+        [0, 1], size=imfft.shape, p=[corruption, 1 - corruption]
+    )
+    imifft = np.abs(np.fft.ifft2(imcfft))
+    return imifft
+
+
 def images_preprocessing(
     images: Union[Tuple[np.ndarray], np.ndarray],
     masks=None,
@@ -46,6 +56,7 @@ def images_preprocessing(
     noise_range=(-1e-2, 1e-2),
     rotate90=True,
     gaussian_sigma: float = 1.0,
+    corruption: float = 0,
 ) -> Union[np.ndarray, Tuple[np.ndarray]]:
     if isinstance(images, np.ndarray) and len(images.shape) == 3:
         images = [images]
@@ -53,6 +64,8 @@ def images_preprocessing(
         for i in range(len(images)):
             rgamma = np.random.uniform(*gamma_range)
             images[i] = exposure.adjust_gamma(images[i], rgamma)
+            if corruption > 0:
+                images[i] = fft_corrupt_image(images[i], corruption)
 
     if noise_range is not None:
         r = np.random.uniform(*noise_range, size=images.shape)

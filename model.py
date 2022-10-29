@@ -10,7 +10,7 @@ from typing import Tuple, Union
 import numpy as np
 import tensorflow as tf
 from skimage import io
-from keras.layers import (
+from tensorflow.keras.layers import (
     BatchNormalization,
     GaussianDropout,
     Concatenate,
@@ -21,13 +21,13 @@ from keras.layers import (
     LeakyReLU,
     MaxPool2D,
 )
-from keras.losses import BinaryCrossentropy
-from keras.models import Model, Sequential
-from keras.optimizers import Adam
-from keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
 from tqdm import tqdm
-from dataset import DataIterator, HexagonDataIterator
-import keras.backend as K
+from dataset import DataIterator
+import tensorflow.keras.backend as K
 
 np.set_printoptions(suppress=True)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -239,15 +239,6 @@ class GAN:
         batch_size=128,
         save_per_epochs=5,
         log_per_steps=5,
-        hexagon_params={
-            "hexagon_height": (17, 21),
-            "neatness_range": (0.6, 0.75),
-            "normalize": False,
-            "inv_values": True,
-            "remove_edges_ratio": 0.1,
-            "rotation_range": (0, 0),
-            "random_shift": 8,
-        },
         dataset_rot90=False,
     ):
         # Prepare label arrays for D and GAN training
@@ -269,23 +260,17 @@ class GAN:
                 inv_values=True,
                 rot90=dataset_rot90,
             )
-            data_hz = HexagonDataIterator(
-                batch_size,
-                self.patch_size,
-                self.patch_per_image * len(dataset),
-                self.noise_size,
-                **hexagon_params,
-            )
             steps = len(data_it)
             assert steps > log_per_steps
 
             # Training discriminator loop
-            for step, ((gts, images_real), (h, z)) in enumerate(zip(data_it, data_hz)):
+            for step, (gts, images_real), in enumerate(data_it):
                 # Concatenate fake with true
-                image_fake = self.g_model.predict_on_batch([h, z])
+                z = tf.random.normal((len(gts), *self.noise_size))
+                image_fake = self.g_model.predict_on_batch([gts, z])
 
                 # Train discriminator on predicted and real and fake data
-                gts_join = tf.concat([gts, h], axis=0)
+                gts_join = tf.concat([gts, gts], axis=0)
                 images_join = tf.concat([images_real, image_fake], axis=0)
                 metrics_d = self.d_model.train_on_batch(
                     [gts_join, images_join], labels_join
@@ -296,8 +281,8 @@ class GAN:
                 metrics_g = self.g_model.train_on_batch([gts, z], images_real)
 
                 # Train generator via discriminator
-                z = tf.random.normal((len(h), *self.noise_size))
-                metrics_gan = self.gan.train_on_batch([h, z], real_labels)
+                z = tf.random.normal((len(gts), *self.noise_size))
+                metrics_gan = self.gan.train_on_batch([gts, z], real_labels)
 
                 # Store generator and discriminator metrics
                 if step % log_per_steps == log_per_steps - 1:

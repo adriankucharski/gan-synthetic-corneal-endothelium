@@ -53,6 +53,7 @@ if __name__ == "__main__":
         noise_range=preprocesing["noise_range"],
         rotate90=preprocesing["rotate90"],
         gaussian_sigma=preprocesing["gaussian_sigma"],
+        corruption=preprocesing["corruption"]
     )
 
     _, test = load_dataset(
