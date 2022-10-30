@@ -56,7 +56,7 @@ def images_preprocessing(
     noise_range=(-1e-2, 1e-2),
     rotate90=True,
     gaussian_sigma: float = 1.0,
-    corruption: float = 0,
+    corruption_range = (0, 0.2),
 ) -> Union[np.ndarray, Tuple[np.ndarray]]:
     if isinstance(images, np.ndarray) and len(images.shape) == 3:
         images = [images]
@@ -64,8 +64,12 @@ def images_preprocessing(
         for i in range(len(images)):
             rgamma = np.random.uniform(*gamma_range)
             images[i] = exposure.adjust_gamma(images[i], rgamma)
-            if corruption > 0:
-                images[i] = fft_corrupt_image(images[i], corruption)
+    
+    if corruption_range is not None:
+        a, b = corruption_range
+        for i in range(len(images)):
+            corruption = np.random.uniform(a, b)
+            images[i] = fft_corrupt_image(images[i], corruption)
 
     if noise_range is not None:
         r = np.random.uniform(*noise_range, size=images.shape)
@@ -263,6 +267,14 @@ def generate_dataset(
         masks = 1 - masks
     return images, masks
 
+def dataset_swap_axes(dataset: Tuple):
+    images, gts, rois, markers = [], [], [], []
+    for i in range(len(dataset)):
+        images.append(dataset[i][0])
+        gts.append(dataset[i][1])
+        rois.append(dataset[i][2])
+        markers.append(dataset[i][3])
+    return images, gts, rois, markers
 
 def rescale_cell_size(
     im: np.ndarray,
