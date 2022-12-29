@@ -16,7 +16,8 @@ from skimage import morphology
 from dataset import dataset_swap_axes, load_dataset
 from predict_segmentation import UnetPrediction
 from util import neighbors_stats, postprocess_sauvola, mark_with_markers
-from multiprocessing import Pool
+from multiprocessing import pool
+import multiprocessing
 import os
 import itertools
 
@@ -41,10 +42,16 @@ def MHD(A: np.ndarray, B: np.ndarray) -> float:
 def dice(A: np.ndarray, B: np.ndarray) -> float:
     A = A.flatten()
     B = B.flatten()
-    return 2.0*np.sum(A * B) / (np.sum(A) + np.sum(B))
+    return 2.0 * np.sum(A * B) / (np.sum(A) + np.sum(B))
 
 
-def pearsonr_image(im1: np.ndarray, im2: np.ndarray, roi: np.ndarray, markers: np.ndarray, plotpath=None) -> float:
+def pearsonr_image(
+    im1: np.ndarray,
+    im2: np.ndarray,
+    roi: np.ndarray,
+    markers: np.ndarray,
+    plotpath=None,
+) -> float:
     markers[roi == False] = 0
     markers = scipy.ndimage.label(markers)[0]
     markers = markers[..., 0] if len(markers.shape) == 3 else markers
@@ -67,14 +74,16 @@ def pearsonr_image(im1: np.ndarray, im2: np.ndarray, roi: np.ndarray, markers: n
     if plotpath is not None:
         plt.clf()
         plt.scatter(cell_size1, cell_size2)
-        plt.xlabel('CNN predict')
-        plt.ylabel('Mask')
-        plt.title('Pearsonr cells area: ' + str('%.4f' % pearsonr))
+        plt.xlabel("CNN predict")
+        plt.ylabel("Mask")
+        plt.title("Pearsonr cells area: " + str("%.4f" % pearsonr))
         plt.savefig(plotpath)
     return pearsonr
 
 
-def cell_neighbours_stats(im_true: np.ndarray, im_pred: np.ndarray, roi: np.ndarray, markers: np.ndarray) -> Tuple[float, float]:
+def cell_neighbours_stats(
+    im_true: np.ndarray, im_pred: np.ndarray, roi: np.ndarray, markers: np.ndarray
+) -> Tuple[float, float]:
     neighbours_true, _ = neighbors_stats(im_true, markers, roi)
     neighbours_pred, _ = neighbors_stats(im_pred, markers, roi)
 
@@ -83,8 +92,7 @@ def cell_neighbours_stats(im_true: np.ndarray, im_pred: np.ndarray, roi: np.ndar
 
     hexagonality = 0
     if hexagonality_true != 0:
-        hexagonality = np.abs(hexagonality_true -
-                              hexagonality_pred) / hexagonality_true
+        hexagonality = np.abs(hexagonality_true - hexagonality_pred) / hexagonality_true
     neighbours = metrics.mean_absolute_error(neighbours_true, neighbours_pred)
 
     # [3, 6, 5] - (1 / 3)
@@ -97,66 +105,78 @@ def cell_neighbours_stats(im_true: np.ndarray, im_pred: np.ndarray, roi: np.ndar
     return neighbours, hexagonality
 
 
-def calculate(i: int,
-              window_size: int,
-              predicted: np.ndarray,
-              gts: np.ndarray,
-              markers: np.ndarray,
-              rois: np.ndarray
-              ):
-    p = postprocess_sauvola(
-        predicted[i], rois[i], size=window_size, pruning_op=True)
+def calculate(
+    i: int,
+    window_size: int,
+    predicted: np.ndarray,
+    gts: np.ndarray,
+    markers: np.ndarray,
+    rois: np.ndarray,
+):
+    p = postprocess_sauvola(predicted[i], rois[i], size=window_size, pruning_op=True)
 
-    p_dilated = morphology.dilation(
-        p[..., 0], morphology.square(3))
-    gt_dilated = morphology.dilation(
-        gts[i][..., 0], morphology.square(3))
+    p_dilated = morphology.dilation(p[..., 0], morphology.square(3))
+    gt_dilated = morphology.dilation(gts[i][..., 0], morphology.square(3))
 
     mhd = MHD(gts[i], p)
     dc = dice(p_dilated, gt_dilated)
     pearsonr = pearsonr_image(gts[i], p, rois[i], markers[i])
-    neighbours, hexagonality = cell_neighbours_stats(
-        p, gts[i], rois[i], markers[i])
+    neighbours, hexagonality = cell_neighbours_stats(p, gts[i], rois[i], markers[i])
+    
     return dc, mhd, pearsonr, neighbours, hexagonality
 
 
-if __name__ == '__main__':
-    datasets_names = ['Alizarine', 'Gavet',
-                      'Hard', 'Rotterdam', 'Rotterdam_1000']
+if __name__ == "__main__":
+    datasets_names = ["Alizarine", "Gavet", "Hard", "Rotterdam", "Rotterdam_1000"]
 
     args = sys.argv[1:]
     if len(args) < 4:
-        print('Provide at least four arguments')
+        print("Provide at least four arguments")
         exit()
 
     dataset_name, fold, models_path, window_size = args[0:4]
     if dataset_name not in datasets_names:
-        print('Dataset not found. Valid names', datasets_names)
+        print("Dataset not found. Valid names", datasets_names)
         exit()
 
-    stride = 16
+    stride = 8
     batch_size = 256
+    standardization = False
     _, test = load_dataset(
-        f'datasets/{dataset_name}/folds.json', normalize=False, as_numpy=False)[int(fold)]
+        f"datasets/{dataset_name}/folds.json", normalize=False, as_numpy=False
+    )[int(fold)]
 
     images, gts, rois, markers = dataset_swap_axes(test)
-    print(len(images))
-    suffix = ''
-    if 'raw' in models_path:
-        suffix = 'raw'
+    print('Number of images:', len(images))
+    
+    suffix = ""
+    if "raw" in models_path:
+        suffix = "raw"
     else:
-        suffix = 'synthetic'
+        suffix = "synthetic"
 
-    filename = f'{dataset_name}_{fold}_{window_size}_{suffix}.txt'
-    [Path(path).mkdir(exist_ok=True) for path in ['result_best', 'result']]
-    with open(os.path.join('result', filename), 'w') as rf, open(os.path.join('result_best', filename), 'w') as rb:
-        p = models_path if os.path.isfile(
-            models_path) else os.path.join(models_path, '*')
+    filename = f"{dataset_name}_{fold}_{window_size}_{suffix}.txt"
+    [Path(path).mkdir(exist_ok=True) for path in ["result_best", "result"]]
+    with open(os.path.join("result", filename), "w") as rf, open(
+        os.path.join("result_best", filename), "w"
+    ) as rb:
+        p = (
+            models_path
+            if os.path.isfile(models_path)
+            else os.path.join(models_path, "*")
+        )
 
-        print(p, os.path.isfile(models_path))
-        for model_path in glob(p):
+        cpus = multiprocessing.cpu_count()
+        print(p, os.path.isfile(models_path), f"| CPU: {cpus}")
+        thread_pool = pool.ThreadPool(cpus)
+        for model_path in glob(p)[10:]:
+
             unet = UnetPrediction(
-                model_path, stride=stride, batch_size=batch_size)
+                model_path,
+                stride=stride,
+                batch_size=batch_size,
+                standardization=standardization,
+            )
             predicted = unet.predict(images)
 
             dcs = []
@@ -165,46 +185,54 @@ if __name__ == '__main__':
             neighbours = []
             hexagonality = []
 
-            args = zip(range(len(predicted)),
-                       itertools.repeat(int(window_size)),
-                       itertools.repeat(predicted),
-                       itertools.repeat(gts),
-                       itertools.repeat(markers),
-                       itertools.repeat(rois)
-                       )
+            args = zip(
+                range(len(predicted)),
+                itertools.repeat(int(window_size)),
+                itertools.repeat(predicted),
+                itertools.repeat(gts),
+                itertools.repeat(markers),
+                itertools.repeat(rois),
+            )
 
-            with Pool(os.cpu_count() // 2) as pool:
-                results = [pool.apply_async(calculate, arg) for arg in args]
+            results = thread_pool.starmap(calculate, args)
+            for res in results:
+                dc, mhd, pearsonr, neighbours_mse, hexagonality_rate = res
+                dcs.append(dc)
+                mhds.append(mhd)
+                pearsonrs.append(pearsonr)
+                neighbours.append(neighbours_mse)
+                hexagonality.append(hexagonality_rate)
 
-                for res in results:
-                    dc, mhd, pearsonr, neighbours_mse, hexagonality_rate = res.get()
-                    dcs.append(dc)
-                    mhds.append(mhd)
-                    pearsonrs.append(pearsonr)
-                    neighbours.append(neighbours_mse)
-                    hexagonality.append(hexagonality_rate)
+            print(
+                Path(model_path).name,
+                f"{np.mean(dcs):.3f}",
+                f"{np.mean(mhds):.3f}",
+                f"{np.mean(pearsonrs):.3f}",
+                f"{np.mean(neighbours):.3f}",
+                f"{np.mean(hexagonality):.3f}",
+            )
 
-            print(Path(model_path).name,
-                  f'{np.mean(dcs):.3f}',
-                  f'{np.mean(mhds):.3f}',
-                  f'{np.mean(pearsonrs):.3f}',
-                  f'{np.mean(neighbours):.3f}',
-                  f'{np.mean(hexagonality):.3f}'
-                  )
-
-            line = '\n'.join([
-                f'{np.mean(dcs):.3f}',
-                f'{np.mean(mhds):.3f}',
-                f'{np.mean(pearsonrs):.3f}',
-                f'{np.mean(neighbours):.3f}',
-                f'{np.mean(hexagonality):.3f}'
-            ])
-            rf.write(line + '\n')
-            line = '\n'.join([
-                f'dice, {dcs}',
-                f'mhd, {mhds}',
-                f'pearsonrs, {pearsonrs}',
-                f'neighbours, {neighbours}',
-                f'hexagonality, {hexagonality}'
-            ]).replace('[', '').replace(']', '')
-            rb.write(line + '\n')
+            line = "\n".join(
+                [
+                    f"{np.mean(dcs):.3f}",
+                    f"{np.mean(mhds):.3f}",
+                    f"{np.mean(pearsonrs):.3f}",
+                    f"{np.mean(neighbours):.3f}",
+                    f"{np.mean(hexagonality):.3f}",
+                ]
+            )
+            rf.write(line + "\n")
+            line = (
+                "\n".join(
+                    [
+                        f"dice, {dcs}",
+                        f"mhd, {mhds}",
+                        f"pearsonrs, {pearsonrs}",
+                        f"neighbours, {neighbours}",
+                        f"hexagonality, {hexagonality}",
+                    ]
+                )
+                .replace("[", "")
+                .replace("]", "")
+            )
+            rb.write(line + "\n")

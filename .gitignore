@@ -7,7 +7,7 @@
 logs.txt
 /temp/
 *.gif
-temp.py
+temp.*
 create_animation.py
 /segmentation/
 /result/

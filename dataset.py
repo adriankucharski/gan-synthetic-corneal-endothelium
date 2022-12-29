@@ -5,7 +5,8 @@ Dataset
 """
 import json
 import os
-from typing import Tuple, Union
+from typing import List, Tuple, Union
+import cv2
 
 import numpy as np
 import tensorflow as tf
@@ -56,15 +57,23 @@ def images_preprocessing(
     noise_range=(-1e-2, 1e-2),
     rotate90=True,
     gaussian_sigma: float = 1.0,
-    corruption_range = (0, 0.2),
+    corruption_range=(0, 0.2),
+    log_range=(0.5, 1.0),
+    standardization=False,
 ) -> Union[np.ndarray, Tuple[np.ndarray]]:
     if isinstance(images, np.ndarray) and len(images.shape) == 3:
         images = [images]
-    if gamma_range is not None:
+
+    if gamma_range is not None or log_range is not None:
         for i in range(len(images)):
-            rgamma = np.random.uniform(*gamma_range)
-            images[i] = exposure.adjust_gamma(images[i], rgamma)
-    
+            gamma_or_log = np.random.choice([True, False])
+            if gamma_range is not None and (gamma_or_log or log_range is None):
+                g = np.random.uniform(*gamma_range)
+                images[i] = exposure.adjust_gamma(images[i], g)
+            if log_range is not None and (not gamma_or_log or gamma_range is None):
+                g = np.random.uniform(*log_range)
+                images[i] = exposure.adjust_log(images[i], g)
+
     if corruption_range is not None:
         a, b = corruption_range
         for i in range(len(images)):
@@ -82,6 +91,12 @@ def images_preprocessing(
                 masks[i] = np.rot90(masks[i], k=k[i])
             images[i] = np.rot90(images[i], k=k[i])
 
+    images = np.clip(images, 0, 1)
+
+    if standardization:
+        for i in range(len(images)):
+            images[i] = (images[i] - np.mean(images[i])) / np.std(images[i])
+
     if masks is not None:
         if gaussian_sigma is not None and gaussian_sigma > 0:
             for i in range(len(masks)):
@@ -96,12 +111,12 @@ def images_preprocessing(
 
 def load_dataset(
     json_path: str, normalize=True, swapaxes=False, as_numpy=True
-) -> Tuple[Tuple[np.ndarray, np.ndarray]]:
+) -> List[Tuple[np.ndarray, np.ndarray]]:
     """
     json_path - path with json that describe dataset
     normalize - if true images have value [-1, 1] else [0, 1]
     swapaxes - if true [num_of_images, 4, h, w, 1] else [4, num_of_images, h, w, 1]
-    Returns dataset in format Tuple[Tuple[train: np.ndarray, test: np.ndarray]]
+    Returns dataset in format List[Tuple[train: np.ndarray, test: np.ndarray]]
     train | test: np.ndarray[A, B, height, width, 1]
     Where A is number of images in a fold, B is 3 - [image, gt, roi, markers]
     """
@@ -129,24 +144,23 @@ def load_dataset(
                     ]
                     / 255.0
                 )
-            gt = (
-                io.imread(os.path.join(gt_path, path), as_gray=True)[
-                    np.newaxis, ..., np.newaxis
-                ]
-                / 255.0
-            )
-            roi = (
-                io.imread(os.path.join(roi_path, path), as_gray=True)[
-                    np.newaxis, ..., np.newaxis
-                ]
-                / 255.0
-            )
-            markers = (
-                io.imread(os.path.join(markers_path, path), as_gray=True)[
-                    np.newaxis, ..., np.newaxis
-                ]
-                / 255.0
-            )
+            gt = io.imread(os.path.join(gt_path, path), as_gray=True)[
+                np.newaxis, ..., np.newaxis
+            ]
+            if gt.max() > 1.0:
+                gt = gt / 255.0
+
+            roi = io.imread(os.path.join(roi_path, path), as_gray=True)[
+                np.newaxis, ..., np.newaxis
+            ]
+            if roi.max() > 1.0:
+                roi = roi / 255.0
+
+            markers = io.imread(os.path.join(markers_path, path), as_gray=True)[
+                np.newaxis, ..., np.newaxis
+            ]
+            if markers.max() > 1.0:
+                markers = markers / 255.0
 
             if w is not None and h is not None:
                 w, h = int(w), int(h)
@@ -199,7 +213,7 @@ def load_dataset(
 
 def generate_dataset_from_generators(
     generators_path: Tuple[str], params: GeneratorParams
-):
+) -> Tuple[np.ndarray, np.ndarray]:
     synthetic_image, synthetic_mask = None, None
     for generator_path in generators_path:
         image, mask = generate_dataset(generator_path, **params)
@@ -267,6 +281,7 @@ def generate_dataset(
         masks = 1 - masks
     return images, masks
 
+
 def dataset_swap_axes(dataset: Tuple):
     images, gts, rois, markers = [], [], [], []
     for i in range(len(dataset)):
@@ -275,6 +290,7 @@ def dataset_swap_axes(dataset: Tuple):
         rois.append(dataset[i][2])
         markers.append(dataset[i][3])
     return images, gts, rois, markers
+
 
 def rescale_cell_size(
     im: np.ndarray,
@@ -449,3 +465,17 @@ class DataIterator(tf.keras.utils.Sequence):
     def get_dataset(self) -> Tuple[np.ndarray, np.ndarray]:
         "self.mask, self.image"
         return self.mask, self.image
+
+
+def crop_patch(
+    im: np.ndarray, mask: np.ndarray, border: int = 3
+) -> Tuple[np.ndarray, np.ndarray]:
+    if len(im.shape) == 3:
+        w, h, _ = im.shape
+    else:
+        w, h = im.shape
+    im = im[border : w - border, border : h - border]
+    mask = mask[border : w - border, border : h - border]
+    im = cv2.resize(im, (w, h), interpolation=cv2.INTER_NEAREST)[..., np.newaxis]
+    mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)[..., np.newaxis]
+    return (im, mask)

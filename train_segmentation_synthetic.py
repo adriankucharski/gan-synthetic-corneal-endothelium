@@ -6,7 +6,10 @@ Train Segmentation Unet with synthetic data
 import json
 import os
 from typing import Tuple
+
+import numpy as np
 from dataset import (
+    crop_patch,
     generate_dataset_from_generators,
     images_preprocessing,
     load_dataset,
@@ -17,18 +20,6 @@ from util import dumb_params
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-
-def replace_images_with_models(
-    paths: Tuple[str], model_name: str = "model_{}.h5"
-) -> Tuple[str]:
-    paths = list([p.replace("data/images", "generator/models") for p in paths])
-    for i in range(len(paths)):
-        splitted = os.path.split(paths[i])
-        idx = splitted[-1]
-        path = os.path.join(*splitted[:-1], model_name.format(idx))
-        paths[i] = path
-    return paths
 
 
 if __name__ == "__main__":
@@ -53,7 +44,9 @@ if __name__ == "__main__":
         noise_range=preprocesing["noise_range"],
         rotate90=preprocesing["rotate90"],
         gaussian_sigma=preprocesing["gaussian_sigma"],
-        corruption_range=preprocesing["corruption_range"]
+        corruption_range=preprocesing["corruption_range"],
+        log_range=preprocesing["log_range"],
+        standardization=preprocesing["standardization"]
     )
 
     _, test = load_dataset(

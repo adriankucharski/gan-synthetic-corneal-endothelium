@@ -3,7 +3,7 @@ UNet patch-based prediction
 Based on predict.py from https://github.com/afabijanska/CornealEndothelium
 @author: Adrian Kucharski
 """
-
+from datetime import datetime
 import json
 from glob import glob
 from skimage import io
@@ -11,9 +11,14 @@ from scipy.ndimage import gaussian_filter
 import os
 from pathlib import Path
 import numpy as np
+from tqdm import tqdm
 from tensorflow.keras.models import Model, load_model
 from typing import Tuple, Union
 from model import dice_loss
+import tensorflow
+import itertools
+
+print(tensorflow.config.list_physical_devices("GPU"))
 
 
 class UnetPrediction:
@@ -24,6 +29,7 @@ class UnetPrediction:
         stride: int = 4,
         batch_size: int = 64,
         sigma=None,
+        standardization=False,
     ):
         self.model: Model = load_model(
             model_path, custom_objects={"dice_loss": dice_loss}
@@ -32,51 +38,33 @@ class UnetPrediction:
         self.stride = stride
         self.batch_size = batch_size
         self.sigma = sigma
+        self.standardization = standardization
 
     def _build_img_from_patches(
         self, preds: np.ndarray, img_h: int, img_w: int
     ) -> np.ndarray:
-        patch_h, patch_w = preds.shape[1:3]
-
-        H = (img_h - patch_h) // self.stride + 1
-        W = (img_w - patch_w) // self.stride + 1
+        H = (img_h - self.patch_size) // self.stride + 1
+        W = (img_w - self.patch_size) // self.stride + 1
         prob = np.zeros((img_h, img_w, 1))
         _sum = np.zeros((img_h, img_w, 1))
-
-        k = 0
-        for h in range(H):
-            for w in range(W):
-                prob[
-                    h * self.stride : (h * self.stride) + patch_h,
-                    w * self.stride : (w * self.stride) + patch_w,
-                    :,
-                ] += preds[k]
-                _sum[
-                    h * self.stride : (h * self.stride) + patch_h,
-                    w * self.stride : (w * self.stride) + patch_w,
-                    :,
-                ] += 1
-                k += 1
+        for i, (h, w) in enumerate(itertools.product(range(H), range(W))):
+            indexes_prob = np.s_[
+                h * self.stride : (h * self.stride) + self.patch_size,
+                w * self.stride : (w * self.stride) + self.patch_size,
+                :,
+            ]    
+            prob[indexes_prob] += preds[i]
+            _sum[indexes_prob] += 1    
         final_avg = prob / _sum
         return final_avg
 
     def _get_patches(self, img: np.ndarray) -> np.ndarray:
-        h, w = img.shape[0], img.shape[1]
-
-        H = (h - self.patch_size) // self.stride + 1
-        W = (w - self.patch_size) // self.stride + 1
-
-        patches = np.empty((W * H, self.patch_size, self.patch_size, 1))
-        iter_tot = 0
-        for h in range(H):
-            for w in range(W):
-                patches[iter_tot] = img[
-                    h * self.stride : (h * self.stride) + self.patch_size,
-                    w * self.stride : (w * self.stride) + self.patch_size,
-                    :,
-                ]
-                iter_tot += 1
-        return patches
+        if len(img.shape) == 3:
+            img = img[..., 0]
+        patches = np.lib.stride_tricks.sliding_window_view(
+            img, (self.patch_size, self.patch_size), writeable=False
+        )[:: self.stride, :: self.stride]
+        return patches.reshape((-1, self.patch_size, self.patch_size, 1))
 
     def _add_outline(self, img: np.ndarray) -> np.ndarray:
         h, w = img.shape[:2]
@@ -99,6 +87,8 @@ class UnetPrediction:
         predicted = []
         for idx in range(len(data)):
             height, width = data[idx].shape[:2]
+            if self.standardization:
+                data[idx] = (data[idx] - np.mean(data[idx])) / np.std(data[idx])
             img = self._add_outline(data[idx])
             if self.sigma is not None:
                 img = gaussian_filter(img, self.sigma)
@@ -151,16 +141,16 @@ class UnetPrediction:
 
 
 if __name__ == "__main__":
-    
-    with open('config.json') as config_file:
-        config = json.load(config_file)['unet.predict']
-    
-    dataset_path = config['dataset_path']
-    fold = config['fold']
-    stride = config['stride']
-    prediction_path_save = config['prediction_path_save']
-    model_path = config['model_path']
-    
+
+    with open("config.json") as config_file:
+        config = json.load(config_file)["unet.predict"]
+
+    dataset_path = config["dataset_path"]
+    fold = config["fold"]
+    stride = config["stride"]
+    prediction_path_save = config["prediction_path_save"]
+    model_path = config["model_path"]
+
     unet_pred = UnetPrediction(model_path, stride=int(stride), batch_size=128)
 
     result_save = Path(prediction_path_save)
@@ -170,10 +160,10 @@ if __name__ == "__main__":
     with open(dataset_path, "r") as f:
         folds_json = json.load(f)
     parent_path = folds_json["dataset_path"]
-    
-    for image in folds_json["folds"][int(fold)]["test"]:
+
+    for image in tqdm(folds_json["folds"][int(fold)]["test"]):
         pr = str(Path(parent_path, "images", image))
         ps = str(Path(result_save, image))
-        pred = np.array(unet_pred.predict(pr)[0] * 255, dtype='uint8')
+        pred = np.array(unet_pred.predict(pr)[0] * 255, dtype="uint8")
         io.imsave(ps, pred)
         print(f"{ps} saved")

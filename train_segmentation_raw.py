@@ -23,14 +23,14 @@ if __name__ == "__main__":
     epochs = int(config["epochs"])
     validation_split = config["validation_split"]
 
-    train, test = load_dataset(
+    train, _ = load_dataset(
         json_path=dataset_meta["path"],
         normalize=False,
         as_numpy=dataset_meta["as_numpy"],
     )[dataset_meta["fold"]]
 
     validation_data = DataIterator(
-        test, 1, patch_per_image=1, inv_values=False
+        train, 1, patch_per_image=1, inv_values=False
     ).get_dataset()
 
     masks, images = DataIterator(

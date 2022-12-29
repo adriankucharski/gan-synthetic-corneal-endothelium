@@ -17,13 +17,13 @@ if __name__ == '__main__':
     with open("config.json") as config_file:
         config = json.load(config_file)['gan.training']
     
-    train, test = load_dataset(config['dataset'], as_numpy=config['as_numpy'])[config['fold']]
+    train, _ = load_dataset(config['dataset'], as_numpy=config['as_numpy'])[config['fold']]
     validation_data = DataIterator(
-        test, 1, patch_per_image=1, inv_values=True).get_dataset()
+        train, 1, patch_per_image=1, inv_values=True).get_dataset()
 
     gan = GAN(patch_per_image=config['patch_per_image'],
               gan_lr=config['gan_lr'], d_lr=config['d_lr'], g_lr=config['g_lr'])
     
     dumb_params(config, 'generator/hexagon_params') # save as logs
     
-    gan.train(100, train, evaluate_data=validation_data, save_per_epochs=1)
+    gan.train(int(config['epochs']), train, evaluate_data=validation_data, save_per_epochs=1)

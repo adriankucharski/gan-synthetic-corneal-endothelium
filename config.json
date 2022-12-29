@@ -1,28 +1,38 @@
 {
   "gan.patch.generator": {
-    "generator_path": "extra_data/generators/Alizarine/model_1.h5",
+    "generator_path": "./extra_data/generators/Gavet/model_5.h5",
     "path_to_save": "generated_patches/",
     "hexagon_generator_params": {
       "num_of_data": 5,
       "batch_size": 5,
-      "hexagon_height": [28, 32],
-      "neatness_range": [0.6, 0.9],
+      "hexagon_height": [17, 25],
+      "neatness_range": [0.6, 0.8],
+      "remove_edges_ratio": 0.05,
+      "rotation_range": [-60, 60],
       "sap_ratio": [0.0, 0.1],
       "sap_value_range": [0.2, 0.8],
       "keep_edges": 0.8,
-      "remove_edges_ratio": 0.05,
-      "rotation_range": [-60, 60],
       "inv_values": true
+    },
+    "preprocesing": {
+      "gamma_range": [0.4, 0.8],
+      "log_range": null,
+      "rotate90": true,
+      "noise_range": [-1e-2, 1e-2],
+      "gaussian_sigma": 1.0,
+      "corruption_range": null,
+      "standardization": false
     }
   },
   "gan.training": {
-    "dataset": "./datasets/Rotterdam_1000/folds.json",
-    "fold": 0,
+    "dataset": "./datasets/Gavet/folds.json",
+    "fold": 3,
     "patch_per_image": 512,
     "g_lr": 1e-5,
     "gan_lr": 2e-4,
     "d_lr": 2e-4,
-    "as_numpy": false
+    "as_numpy": false,
+    "epochs": 100
   },
   "unet.synthetic.training": {
     "epochs": 25,
@@ -33,8 +43,8 @@
       "as_numpy": false
     },
     "hexagon_generator_params": {
-      "num_of_data": 2500,
-      "hexagon_height": [18, 21],
+      "num_of_data": 4000,
+      "hexagon_height": [20, 26],
       "batch_size": 100,
       "neatness_range": [0.6, 0.8],
       "remove_edges_ratio": 0.05,
@@ -45,41 +55,85 @@
       "inv_values": true
     },
     "preprocesing": {
-      "gamma_range": [0.5, 1.0],
+      "gamma_range": null,
+      "log_range": [0.2, 0.8],
       "rotate90": true,
-      "noise_range": [-1e-2, 1e-2],
+      "noise_range": [-0.01, 0.01],
       "gaussian_sigma": 1.0,
-      "corruption_range": null
+      "corruption_range": null,
+      "standardization": false
     },
     "generators": [
-      "./extra_data/generators/Alizarine/model_1.h5",
-      "./extra_data/generators/Alizarine/model_2.h5",
-      "./extra_data/generators/Alizarine/model_3.h5",
-      "./extra_data/generators/Alizarine/model_4.h5"
+      "./generator/models/20221127-1402/model_36.h5",
+      "./generator/models/20221127-1402/model_47.h5",
+      "./generator/models/20221127-1402/model_31.h5",
+      "./generator/models/20221127-1402/model_82.h5",
+      "./generator/models/20221127-1402/model_79.h5"
     ]
   },
   "unet.raw.training": {
     "epochs": 25,
     "validation_split": 0.1,
     "dataset_meta": {
-      "path": "./extra_data/Alizarine/folds.json",
+      "path": "./datasets/Gavet/folds.json",
+      "fold": 3,
+      "as_numpy": false,
+      "patch_per_image": 667
+    },
+    "preprocesing": {
+      "gamma_range": null,
+      "rotate90": true,
+      "noise_range": null,
+      "gaussian_sigma": 1.0,
+      "as_numpy": false,
+      "log_range": [0.2, 0.8],
+      "corruption_range": null,
+      "standardization": false
+    }
+  },
+  "unet.mix.training": {
+    "epochs": 25,
+    "validation_split": 0.1,
+    "dataset_meta": {
+      "path": "./datasets/Alizarine/folds.json",
       "fold": 0,
       "as_numpy": false,
-      "patch_per_image": 500
+      "patch_per_image": 250
     },
     "preprocesing": {
       "gamma_range": [0.5, 1.0],
       "rotate90": true,
       "noise_range": null,
       "gaussian_sigma": 1.0,
-      "as_numpy": false
-    }
+      "as_numpy": false,
+      "log_range": null,
+      "corruption_range": null,
+      "standardization": false
+    },
+    "hexagon_generator_params": {
+      "num_of_data": -1,
+      "hexagon_height": [18, 21],
+      "batch_size": 100,
+      "sap_ratio": [0.0, 0.1],
+      "neatness_range": [0.6, 0.8],
+      "sap_value_range": [0.2, 0.8],
+      "keep_edges": 0.8,
+      "remove_edges_ratio": 0.05,
+      "rotation_range": [-60, 60],
+      "inv_values": true
+    },
+    "generators": [
+      "generator\\models\\20220429-0021\\model_71.h5",
+      "generator\\models\\20220429-0021\\model_76.h5",
+      "generator\\models\\20220429-0021\\model_81.h5",
+      "generator\\models\\20220429-0021\\model_88.h5"
+    ]
   },
   "unet.predict": {
-    "dataset_path": "./extra_data/Alizarine/folds.json",
+    "dataset_path": "./datasets/Gavet/folds.json",
     "prediction_path_save": "./segmented_images",
     "fold": 0,
-    "stride": 4,
-    "model_path": "./extra_data/unets/model_raw.hdf5"
+    "stride": 8,
+    "model_path": "segmentation/models/raw/20220603-0826/model-25.hdf5"
   }
 }
