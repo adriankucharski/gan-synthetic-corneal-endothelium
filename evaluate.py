@@ -94,14 +94,6 @@ def cell_neighbours_stats(
     if hexagonality_true != 0:
         hexagonality = np.abs(hexagonality_true - hexagonality_pred) / hexagonality_true
     neighbours = metrics.mean_absolute_error(neighbours_true, neighbours_pred)
-
-    # [3, 6, 5] - (1 / 3)
-
-    # [2, 6, 2] - (1 / 3)
-    # [2, 6, 3] - (1 / 3)
-    # [2, 6, 4] - (1 / 3)
-    # r2
-    # return metrics.accuracy_score(im1_n, im2_n)
     return neighbours, hexagonality
 
 
@@ -152,8 +144,10 @@ if __name__ == "__main__":
     suffix = ""
     if "raw" in models_path:
         suffix = "raw"
-    else:
+    elif "synthetic" in models_path:
         suffix = "synthetic"
+    elif "mix" in models_path:
+        suffix = "mix"
 
     filename = f"{dataset_name}_{fold}_{window_size}_{suffix}.txt"
     [Path(path).mkdir(exist_ok=True) for path in ["result_best", "result"]]

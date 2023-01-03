@@ -134,6 +134,6 @@
     "prediction_path_save": "./segmented_images",
     "fold": 0,
     "stride": 8,
-    "model_path": "segmentation/models/raw/20220603-0826/model-25.hdf5"
+    "model_path": "segmentation/models/mix/20221205-2121/model-25.hdf5"
   }
 }

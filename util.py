@@ -108,14 +108,14 @@ def add_jpeg_compression(im: np.ndarray, quality: int = 100) -> np.ndarray:
 
 
 def pruning(im: np.ndarray, outline_val=1.0) -> np.ndarray:
-    im = np.array(im, np.int)
+    im = np.array(im, int)
     elem = np.array([[16, 32, 64], [8, 1, 128], [4, 2, 256]])
     val = np.array([1, 3, 5, 9, 17, 33, 65, 129, 257, 7, 13, 25, 49, 97, 193, 259, 385])
     count = True
     while count == True:
         count = False
         diff = scipy.ndimage.convolve(im, elem, mode="constant", cval=outline_val)
-        diff[~np.array(im, np.bool)] = 0
+        diff[~np.array(im, bool)] = 0
         diff = np.isin(diff, val)
         if np.any(diff > 0):
             im = np.subtract(im, diff)
