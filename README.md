@@ -13,4 +13,7 @@ Code was tested on Windows 10 64-bit with Python 3.10.9, and TensorFlow 2.9.1. B
 ## Streamlit App
 To run a Streamlit app you can use the command `streamlit run main.py` in your terminal or command prompt. Make sure that you have streamlit package installed on your machine before running this command.
 If you get `ImportError: cannot import name 'builder' from 'google.protobuf.internal'` run `python -m pip install --upgrade protobuf` or `python -m pip install protobuf==3.20.0`.
+
+You can generate and download a corneal endothelium images dataset with a GUI. You can also use the `gan_patch_generator.ipynb` notebook to do so.
+
 ![plot](./docs/app_frontend.png)
