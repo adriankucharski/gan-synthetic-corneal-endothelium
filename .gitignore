@@ -7,10 +7,12 @@
 logs.txt
 /temp/
 *.gif
-temp.py
+temp.*
 create_animation.py
 /segmentation/
 /result/
 /result_best/
 /result_image/
 /result_image_gan/
+/segmented_images/
+/draw_io_images/
