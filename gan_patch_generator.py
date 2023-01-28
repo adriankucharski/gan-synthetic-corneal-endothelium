@@ -36,10 +36,10 @@ if __name__ == "__main__":
     plt.imshow(np.hstack(synthetic_images), 'gray')
     plt.show()
 
-    # for (mask, image, index) in zip(
-    #     synthetic_masks, synthetic_images, range(len(synthetic_masks))
-    # ):
-    #     io.imsave(str(path_to_save / f"{index}_mask.png"), (mask * 255).astype("uint8"))
-    #     io.imsave(
-    #         str(path_to_save / f"{index}_image.png"), (image * 255).astype("uint8")
-    #     )
+    for (mask, image, index) in zip(
+        synthetic_masks, synthetic_images, range(len(synthetic_masks))
+    ):
+        io.imsave(str(path_to_save / f"{index}_mask.png"), (mask * 255).astype("uint8"))
+        io.imsave(
+            str(path_to_save / f"{index}_image.png"), (image * 255).astype("uint8")
+        )

@@ -44,7 +44,7 @@
     },
     "hexagon_generator_params": {
       "num_of_data": 4000,
-      "hexagon_height": [20, 26],
+      "hexagon_height": [21, 27],
       "batch_size": 100,
       "neatness_range": [0.6, 0.8],
       "remove_edges_ratio": 0.05,
@@ -64,11 +64,11 @@
       "standardization": false
     },
     "generators": [
-      "./generator/models/20221127-1402/model_36.h5",
-      "./generator/models/20221127-1402/model_47.h5",
-      "./generator/models/20221127-1402/model_31.h5",
-      "./generator/models/20221127-1402/model_82.h5",
-      "./generator/models/20221127-1402/model_79.h5"
+      "generator\\models\\20220405-2359\\model_144.h5",
+      "generator\\models\\20220405-2359\\model_145.h5",
+      "generator\\models\\20220405-2359\\model_146.h5",
+      "generator\\models\\20220405-2359\\model_147.h5",
+      "generator\\models\\20220405-2359\\model_125.h5"
     ]
   },
   "unet.raw.training": {
@@ -130,10 +130,10 @@
     ]
   },
   "unet.predict": {
-    "dataset_path": "./datasets/Gavet/folds.json",
+    "dataset_path": "./datasets/Hard/folds.json",
     "prediction_path_save": "./segmented_images",
-    "fold": 0,
+    "fold": 2,
     "stride": 8,
-    "model_path": "segmentation/models/mix/20221205-2121/model-25.hdf5"
+    "model_path": "segmentation/models/synthetic/20230106-1949/model-23.hdf5"
   }
 }
