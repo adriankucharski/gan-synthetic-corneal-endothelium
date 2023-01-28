@@ -25,7 +25,7 @@
     }
   },
   "gan.training": {
-    "dataset": "./datasets/Gavet/folds.json",
+    "dataset":  "./extra_data/Alizarine/folds.json",
     "fold": 3,
     "patch_per_image": 512,
     "g_lr": 1e-5,
@@ -64,11 +64,10 @@
       "standardization": false
     },
     "generators": [
-      "generator\\models\\20220405-2359\\model_144.h5",
-      "generator\\models\\20220405-2359\\model_145.h5",
-      "generator\\models\\20220405-2359\\model_146.h5",
-      "generator\\models\\20220405-2359\\model_147.h5",
-      "generator\\models\\20220405-2359\\model_125.h5"
+      "./extra_data/generators/Alizarine/model_1.h5",
+      "./extra_data/generators/Alizarine/model_2.h5",
+      "./extra_data/generators/Alizarine/model_3.h5",
+      "./extra_data/generators/Alizarine/model_4.h5"
     ]
   },
   "unet.raw.training": {
@@ -95,7 +94,7 @@
     "epochs": 25,
     "validation_split": 0.1,
     "dataset_meta": {
-      "path": "./datasets/Alizarine/folds.json",
+      "path": "./extra_data/Alizarine/folds.json",
       "fold": 0,
       "as_numpy": false,
       "patch_per_image": 250
@@ -123,10 +122,10 @@
       "inv_values": true
     },
     "generators": [
-      "generator\\models\\20220429-0021\\model_71.h5",
-      "generator\\models\\20220429-0021\\model_76.h5",
-      "generator\\models\\20220429-0021\\model_81.h5",
-      "generator\\models\\20220429-0021\\model_88.h5"
+      "./extra_data/generators/Alizarine/model_1.h5",
+      "./extra_data/generators/Alizarine/model_2.h5",
+      "./extra_data/generators/Alizarine/model_3.h5",
+      "./extra_data/generators/Alizarine/model_4.h5"
     ]
   },
   "unet.predict": {
