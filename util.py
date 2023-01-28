@@ -27,22 +27,26 @@ from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology
 from skimage.segmentation import flood_fill
 
-def dumb_params(params: dict, spath: str='segmentation/params'):
+
+def dumb_params(params: dict, spath: str = "segmentation/params"):
     time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
-    sargpath = os.path.join(spath, f'{time}.json')
+    sargpath = os.path.join(spath, f"{time}.json")
     Path(spath).mkdir(parents=True, exist_ok=True)
-    with open(sargpath, 'w') as file:
+    with open(sargpath, "w") as file:
         file.write(json.dumps(params))
+
 
 def time_measure(routine: Callable) -> timedelta:
     start = timer()
     routine()
     end = timer()
-    return timedelta(seconds=end-start)
+    return timedelta(seconds=end - start)
 
 
-def mapFromTo(x: np.ndarray, curr_min: float, curr_max: float, new_min: float, new_max: float) -> np.ndarray:
-    y = (x-curr_min)/(curr_max-curr_min)*(new_max-new_min)+new_min
+def mapFromTo(
+    x: np.ndarray, curr_min: float, curr_max: float, new_min: float, new_max: float
+) -> np.ndarray:
+    y = (x - curr_min) / (curr_max - curr_min) * (new_max - new_min) + new_min
     return y
 
 
@@ -55,7 +59,12 @@ def scale(x: np.ndarray, low=-1, high=1) -> np.ndarray:
     return (x - np.min(x)) * (high - low) / (np.max(x) - np.min(x)) + low
 
 
-def add_salt_and_pepper(x: np.ndarray, sap_ratio: float = 0.1, salt_value: float = 0.5, keep_edges: bool = True) -> np.ndarray:
+def add_salt_and_pepper(
+    x: np.ndarray,
+    sap_ratio: float = 0.1,
+    salt_value: float = 0.5,
+    keep_edges: bool = True,
+) -> np.ndarray:
     x = np.array(x)
     sap = np.random.binomial(x.max(), sap_ratio, x.shape)
     if keep_edges:
@@ -65,7 +74,9 @@ def add_salt_and_pepper(x: np.ndarray, sap_ratio: float = 0.1, salt_value: float
     return x
 
 
-def add_marker_to_mask(mask: np.ndarray, marker_radius: int = 3, min_cell_area: int = 75) -> np.ndarray:
+def add_marker_to_mask(
+    mask: np.ndarray, marker_radius: int = 3, min_cell_area: int = 75
+) -> np.ndarray:
     nmask = np.array(mask)
     nmask[nmask > 0] = 1
     if len(nmask.shape) == 3:
@@ -77,7 +88,7 @@ def add_marker_to_mask(mask: np.ndarray, marker_radius: int = 3, min_cell_area: 
     for i in range(1, num_features + 1):
         indexes = np.array(np.where(labeled_array == i))
         if indexes.shape[-1] >= min_cell_area:
-            cx, cy = np.mean(indexes, axis=-1, dtype='int')
+            cx, cy = np.mean(indexes, axis=-1, dtype="int")
             markers[cx, cy] = 1
     markers = morphology.dilation(markers, morphology.disk(marker_radius))
     markers[markers > 0] = 0.5
@@ -88,43 +99,43 @@ def add_marker_to_mask(mask: np.ndarray, marker_radius: int = 3, min_cell_area: 
 
 
 def add_jpeg_compression(im: np.ndarray, quality: int = 100) -> np.ndarray:
-    if im.dtype != 'uint8':
-        im = (im * 255).astype('uint8')
+    if im.dtype != "uint8":
+        im = (im * 255).astype("uint8")
 
-    _, buff = cv2.imencode(
-        '.jpg', im, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    _, buff = cv2.imencode(".jpg", im, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     decimg: np.ndarray = cv2.imdecode(buff, cv2.IMREAD_GRAYSCALE) / 255
     return decimg.reshape(im.shape)
 
-def pruning(im: np.ndarray, outline_val = 1.0) -> np.ndarray:
-    im = np.array(im, np.int)
-    elem = np.array([
-        [16, 32,  64], 
-        [ 8,  1, 128], 
-        [ 4,  2, 256]
-    ])
+
+def pruning(im: np.ndarray, outline_val=1.0) -> np.ndarray:
+    im = np.array(im, int)
+    elem = np.array([[16, 32, 64], [8, 1, 128], [4, 2, 256]])
     val = np.array([1, 3, 5, 9, 17, 33, 65, 129, 257, 7, 13, 25, 49, 97, 193, 259, 385])
     count = True
     while count == True:
         count = False
-        diff = scipy.ndimage.convolve(im, elem, mode='constant', cval=outline_val)
-        diff[~np.array(im, np.bool)] = 0
-        diff = np.isin(diff, val) 
-        if np.any(diff>0):
+        diff = scipy.ndimage.convolve(im, elem, mode="constant", cval=outline_val)
+        diff[~np.array(im, bool)] = 0
+        diff = np.isin(diff, val)
+        if np.any(diff > 0):
             im = np.subtract(im, diff)
             count = True
     return im
 
+
 def remove_small(im: np.ndarray) -> np.ndarray:
     im = im > 0
-    labeled = scipy.ndimage.label(im, np.full((3,3), 1))[0]
+    labeled = scipy.ndimage.label(im, np.full((3, 3), 1))[0]
     _, counts = np.lib.arraysetops.unique(labeled, return_counts=True)
     counts[counts == np.max(counts)] = 0
-    max_idx = (np.where(counts == np.max(counts))) [0]
+    max_idx = (np.where(counts == np.max(counts)))[0]
     im = labeled == max_idx
-    return im 
+    return im
 
-def postprocess_sauvola(im: np.ndarray, roi: np.ndarray, size=5, dilation_square_size=0, pruning_op=False) -> np.ndarray:
+
+def postprocess_sauvola(
+    im: np.ndarray, roi: np.ndarray, size=5, dilation_square_size=0, pruning_op=False
+) -> np.ndarray:
     if len(im.shape) == 3:
         im = im[..., 0]
     if len(roi.shape) == 3:
@@ -142,22 +153,26 @@ def postprocess_sauvola(im: np.ndarray, roi: np.ndarray, size=5, dilation_square
     return im.reshape((*im.shape[:2], 1))
 
 
-def neighbors_stats(im: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: bool=False) -> Tuple[Tuple[int], graph.RAG]:
+def neighbors_stats(
+    im: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: bool = False
+) -> Tuple[Tuple[int], graph.RAG]:
     im = im.reshape((im.shape[:2]))
     markers = markers.reshape((markers.shape[:2]))
     roi = roi.reshape((roi.shape[:2]))
-    
+
     if np.count_nonzero(im) < np.prod(im.shape):
         im = np.max(im) - im
-    
+
     labels, nums = measurements.label(markers)
-    
+
     image_labeled = np.array(im)
     for x, y in zip(*np.where(labels > 0)):
-        segmentation.flood_fill(image_labeled, (x,y), labels[x,y], connectivity=1, in_place=True)
+        segmentation.flood_fill(
+            image_labeled, (x, y), labels[x, y], connectivity=1, in_place=True
+        )
     image_labeled[roi == 0] = 0
     image_labeled = filters.median(image_labeled, morphology.square(2))
-    
+
     g = graph.rag_mean_color(im, image_labeled)
     # Remove the first node which is connected to all nodes
     g.remove_node(0)
@@ -170,7 +185,7 @@ def neighbors_stats(im: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: 
         graph.show_rag(labels, g, im, ax=ax[0], edge_width=1.25)
         plt.tight_layout()
         plt.show()
-        
+
     neighbors = []
     for label in range(1, nums + 1):
         n = len(list(g.neighbors(label))) if label in g.nodes else 0
@@ -178,13 +193,16 @@ def neighbors_stats(im: np.ndarray, markers: np.ndarray, roi: np.ndarray, show: 
 
     return np.array(neighbors), g
 
-def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, roi: np.ndarray = None) -> np.ndarray:
+
+def mark_with_markers(
+    im: np.ndarray, markers: np.ndarray, labeled=False, roi: np.ndarray = None
+) -> np.ndarray:
     if labeled == False:
         markers = scipy.ndimage.label(markers)[0]
 
     im = np.array((im > 0) * (255 * 255), dtype=np.uint16)
     if roi is not None:
-        im[roi == False] = (255 * 255)
+        im[roi == False] = 255 * 255
 
     im_shape = im.shape
 
@@ -193,7 +211,7 @@ def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, roi: n
     markers = markers[..., 0] if len(markers.shape) == 3 else markers
 
     for (y, x) in zip(*np.where(markers > 0)):
-        if im[y, x] == 255*255:
+        if im[y, x] == 255 * 255:
             continue
         new_value = markers[y, x]
         seed_point = (y, x)
@@ -201,14 +219,13 @@ def mark_with_markers(im: np.ndarray, markers: np.ndarray, labeled=False, roi: n
         im = flood_fill(im, seed_point, new_value, footprint=footprint)
     if roi is not None:
         im[roi == False] = 0
-    im[im == 255*255] = 0
+    im[im == 255 * 255] = 0
     return im[..., np.newaxis] if len(im_shape) == 3 else im
 
 
 def mark_holes(im: np.ndarray, roi: np.ndarray) -> np.ndarray:
-    mask_e = binary_fill_holes(im > 0, np.array(
-        [[0, 1, 0], [1, 1, 1], [0, 1, 0]]))
-    im = np.array((im > 0) * (255*255), np.uint16)
+    mask_e = binary_fill_holes(im > 0, np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]]))
+    im = np.array((im > 0) * (255 * 255), np.uint16)
     x_max, y_max = im.shape
     index = np.argwhere(im > 0)
 
@@ -222,25 +239,30 @@ def mark_holes(im: np.ndarray, roi: np.ndarray) -> np.ndarray:
     # remove 0
     X, Y = X[X > 0], Y[X > 0]
     X, Y = X[Y > 0], Y[Y > 0]
-    #remove < x_max
+    # remove < x_max
     X, Y = X[X < x_max], Y[X < x_max]
-    #remove < y_max
+    # remove < y_max
     X, Y = X[Y < y_max], Y[Y < y_max]
     T = np.array([X, Y])
     index_full = T.T
 
-    im[mask_e == False] = (255*255)
+    im[mask_e == False] = 255 * 255
 
     i = 1
     for idx in index_full:
         x, y = idx
         if im[x, y] == 0:
-            flood_fill(im, (x, y), i, footprint=np.array(
-                [[0, 1, 0], [1, 1, 1], [0, 1, 0]]), in_place=True)
+            flood_fill(
+                im,
+                (x, y),
+                i,
+                footprint=np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]]),
+                in_place=True,
+            )
             i += 1
     im[roi == False] = 0
     im[mask_e == False] = 0
-    im[im == (255*255)] = 0
+    im[im == (255 * 255)] = 0
     return im
 
 
@@ -248,24 +270,26 @@ def cell_stat(im: np.ndarray, roi: np.ndarray, minumum=15) -> Tuple[int, float]:
     im = im.reshape(im.shape[:2])
     roi = roi.reshape(roi.shape[:2])
     im = mark_holes(im, roi)
-    hist = np.histogram(im, np.arange(1, np.max(im) + 2),
-                        (1, np.max(im) + 2))[0]
+    hist = np.histogram(im, np.arange(1, np.max(im) + 2), (1, np.max(im) + 2))[0]
     hist = hist[hist > minumum]  # remove cells with an area less than minimum
     return (len(hist), np.mean(hist))
 
-def create_markers(gt: np.ndarray, roi: np.ndarray = None, min_size = 3, connectivity=2) -> np.ndarray:
+
+def create_markers(
+    gt: np.ndarray, roi: np.ndarray = None, min_size=3, connectivity=2
+) -> np.ndarray:
     """
     Create markers from an GT image
     """
     if np.count_nonzero(gt) < np.prod(gt.shape):
         gt = np.max(gt) - gt
-        
-    gt = morphology.erosion(gt, np.ones((3,3)))
+
+    gt = morphology.erosion(gt, np.ones((3, 3)))
     labels: np.ndarray = measure.label(gt, connectivity=connectivity)
-    
+
     labels_flat = labels.ravel()
     labels_count = np.bincount(labels_flat)
-    index = np.argsort(labels_flat)[labels_count[0]:]
+    index = np.argsort(labels_flat)[labels_count[0] :]
     coordinates = np.column_stack(np.unravel_index(index, gt.shape))
     lab = np.cumsum(labels_count[1:])
 
@@ -276,12 +300,13 @@ def create_markers(gt: np.ndarray, roi: np.ndarray = None, min_size = 3, connect
             continue
         center = np.mean(indexes, axis=0)
         y, x = int(center[0]), int(center[1])
-        gt[y,x] = 255
-        
+        gt[y, x] = 255
+
     if roi is not None:
         gt[roi == 0] = 0
-        
+
     return gt
+
 
 def nonzeros_object_to_centroids(im: np.ndarray) -> np.ndarray:
     """
@@ -293,7 +318,7 @@ def nonzeros_object_to_centroids(im: np.ndarray) -> np.ndarray:
     im: np.ndarray = np.zeros_like(im)
     for i in range(1, nums):
         y, x = np.where(labels == i)
-        y, x = np.mean(y, dtype='int'), np.mean(x, dtype='int')
-        im[y,x] = mx
-    
-    return im.astype('float')
+        y, x = np.mean(y, dtype="int"), np.mean(x, dtype="int")
+        im[y, x] = mx
+
+    return im.astype("float")
