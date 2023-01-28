@@ -7,3 +7,5 @@ scikit-image==0.19.2
 tqdm==4.62.1
 Pillow==9.1.1
 scikit-learn==1.1.2
+tempfile
+streamlit
