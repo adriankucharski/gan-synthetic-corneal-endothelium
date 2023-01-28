@@ -11,4 +11,4 @@ Code was tested on Windows 10 64-bit with Python 3.10.5, and TensorFlow 2.9.1. B
 
 
 ## Streamlit App
-To open a Streamlit app from a script named "main.py", you can use the command streamlit run main.py in your terminal or command prompt. Make sure that you have streamlit package installed on your machine before running this command.
+To open a Streamlit app you can use the command `streamlit run main.py` in your terminal or command prompt. Make sure that you have streamlit package installed on your machine before running this command.
