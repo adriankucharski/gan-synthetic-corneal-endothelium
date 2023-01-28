@@ -29,7 +29,7 @@ generators = list(glob(str(Path('./extra_data/generators/**/*.h5'))))
 if __name__ == '__main__':
     st.title('Corneal Endothelium images and masks generator')
     
-    generator = st.selectbox('GAN generator path', generators, index=0)
+    generator = st.selectbox('Select generator', generators, index=0)
 
     num_of_data_text = st.text_input('Number of data to generate', value=5, type='default')
     
