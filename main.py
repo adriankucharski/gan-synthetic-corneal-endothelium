@@ -62,7 +62,7 @@ if __name__ == '__main__':
             
         gaussian_enabled = st.checkbox('Gaussian sigma')
         if gaussian_enabled:
-            gaussian_sigma = st.slider('Log', 0.5, 2.0, 1.0)
+            gaussian_sigma = st.slider('Sigma', 0.5, 2.0, 1.0)
         else:
             gaussian_sigma = 1.0
             
