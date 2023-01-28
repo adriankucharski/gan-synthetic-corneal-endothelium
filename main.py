@@ -65,19 +65,12 @@ if __name__ == '__main__':
             gaussian_sigma = st.slider('Log', 0.5, 2.0, 1.0)
         else:
             gaussian_sigma = 1.0
-
-        corruption_enabled = st.checkbox('Corruption')
-        if corruption_enabled:
-            corruption_range = st.slider('Corruption range', 0.00, 0.30, (0.05, 0.20))
-        else:
-            corruption_range = None
             
         rotate90 = st.checkbox('Rotate 90 degrees')
 
-    show_data = st.checkbox('Show generated data')
+    show_data = st.checkbox('Show generated data', True)
     generate_button = st.button('Generate data')
-    do_postprocessing = gamma_enabled or log_enabled or gaussian_enabled or corruption_enabled or rotate90
-
+    do_postprocessing = gamma_enabled or log_enabled or gaussian_enabled or rotate90
 
     try:
         num_of_data = int(num_of_data_text)
@@ -90,7 +83,7 @@ if __name__ == '__main__':
         "rotate90": rotate90,
         "noise_range": noise_range,
         "gaussian_sigma": gaussian_sigma,
-        "corruption_range": corruption_range,
+        "corruption_range": None,
         "standardization": False
     }
     hexagon_generator_params = {
