@@ -432,3 +432,4 @@ class SegmentationUnet:
 
     def summary(self):
         self.model.summary()
+
