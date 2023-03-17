@@ -442,6 +442,7 @@ class DataIterator(tf.keras.utils.Sequence):
         self.image, self.mask = [], []
         mid = self.patch_size // 2
         for x, y, roi, markers in self.dataset:
+            x, y = x.astype(np.float32), y.astype(np.float32)
             ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
             xrand = np.random.randint(xmin + mid, xmax - mid, self.patch_per_image)
             yrand = np.random.randint(ymin + mid, ymax - mid, self.patch_per_image)

@@ -18,6 +18,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 loss_object = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 LAMBDA = 100
 
+
 class GANPIX2PIX:
     def __init__(self) -> None:
         self.out_size = 1
@@ -72,17 +73,17 @@ class GANPIX2PIX:
         inputs = tf.keras.layers.Input(shape=[64, 64, 1])
 
         down_stack = [
-            self.downsample(64, 4, apply_batchnorm=False),
-            self.downsample(128, 4),
-            self.downsample(256, 4),
-            self.downsample(512, 4),
+            self.downsample(64, 4, apply_batchnorm=False),  # 32
+            self.downsample(128, 4),                        # 16
+            self.downsample(256, 4),                        # 8
+            self.downsample(512, 4),                        # 4
         ]
 
         up_stack = [
-            self.upsample(512, 4, apply_dropout=True),
-            self.upsample(256, 4),
-            self.upsample(128, 4),
-            self.upsample(64, 4),
+            self.upsample(512, 4, apply_dropout=True),      # 8
+            self.upsample(256, 4),                          # 16
+            self.upsample(128, 4),                          # 32
+            self.upsample(64, 4),                           # 64
         ]
 
         initializer = tf.random_normal_initializer(0.0, 0.02)
@@ -141,8 +142,6 @@ class GANPIX2PIX:
         return tf.keras.Model(inputs=[inp, tar], outputs=last)
 
 
-
-
 def generator_loss(disc_generated_output, gen_output, target):
     gan_loss = loss_object(tf.ones_like(
         disc_generated_output), disc_generated_output)
@@ -160,34 +159,8 @@ def discriminator_loss(disc_real_output, disc_generated_output):
     return total_disc_loss
 
 
-
-
-generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
-discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
-
-pix2pix = GANPIX2PIX()
-generator: Model = pix2pix.get_generator_model()
-discriminator: Model = pix2pix.get_discriminator_model()
-
-generator.compile()
-discriminator.compile()
-
-log_dir="logs/"
-date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-summary_writer = tf.summary.create_file_writer(
-  log_dir + "fit/" + date)
-
-image_save_path = log_dir + "fit/" + date + '/images/'
-model_save_path = log_dir + "fit/" + date + '/generators/'
-
-Path(image_save_path).mkdir(parents=True, exist_ok=True)
-Path(model_save_path).mkdir(parents=True, exist_ok=True)
-print(image_save_path, model_save_path)
-
-
-
 @tf.function
-def train_step(input_image, target, step):
+def train_step(input_image, target, step, generator, discriminator, generator_optimizer, discriminator_optimizer, summary_writer):
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         gen_output = generator(input_image, training=True)
 
@@ -216,32 +189,35 @@ def train_step(input_image, target, step):
         tf.summary.scalar('gen_l1_loss', gen_l1_loss, step=step//1000)
         tf.summary.scalar('disc_loss', disc_loss, step=step//1000)
 
+
 def train_loop(
     epochs: int,
     dataset: Tuple[np.ndarray],
+    generator: Model,
+    discriminator: Model,
+    generator_optimizer,
+    discriminator_optimizer,
+    summary_writer,
     evaluate_data: Tuple[np.ndarray] = None,
     batch_size=128,
     dataset_rot90=False,
 ):
     for epoch in range(1, epochs + 1):
         # Init iterator
-        masks, images = DataIterator(
+        data_it = DataIterator(
             dataset,
             inv_values=False,
             rot90=dataset_rot90,
-        ).get_dataset()
+            batch_size=batch_size
+        )
 
-        masks = np.array(masks, dtype=np.float32)
-        images = np.array(images, dtype=np.float32)
+        for _step, (x, y) in tqdm(enumerate(data_it), total=len(data_it)):
+            train_step(x, y, _step * epoch, generator, discriminator,
+                       generator_optimizer, discriminator_optimizer, summary_writer)
 
-        for _step, i in tqdm(enumerate(range(0, len(images) - batch_size + 1, batch_size)), total=len(images) // batch_size):
-            x, y = masks[i:i+batch_size], images[i:i+batch_size]
-            train_step(x, y, _step * epoch)
+        if epoch > 20:
+            generator.save(model_save_path + f'gan_{epoch}.hdf5')
 
-        del masks, images
-        
-        generator.save(model_save_path + f'gan_{epoch}.hdf5')
-        
         if evaluate_data is not None:
             xdata, ydata = evaluate_data
             pdata = generator.predict_on_batch(xdata)
@@ -249,22 +225,45 @@ def train_loop(
             for i in range(len(xdata)):
                 x, y, p = xdata[i], ydata[i], pdata[i]
                 image = np.array(
-                    np.concatenate([x, (p + 1) / 2, (y + 1) / 2.0], axis=1) * 255, "uint8"
+                    np.concatenate([x, (p + 1) / 2, (y + 1) /
+                                   2.0], axis=1) * 255, "uint8"
                 )
-                impath = image_save_path + f'{i}.png'
+                impath = image_save_path + f'{epoch}/' + f'{i}.png'
+                Path(image_save_path +
+                     f'{epoch}/').mkdir(parents=True, exist_ok=True)
                 io.imsave(impath, image)
-                # if i == 0:
-                #     plt.imshow(image, 'gray')
-                #     plt.show()
-
-                
 
 
-with open("config.json") as config_file:
-    config = json.load(config_file)['gan.training']
+if __name__ == '__main__':
+    generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+    discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
-data_path = "./extra_data/Alizarine/folds.json"
-train, _ = load_dataset(data_path, True)[0]
-validation_data = DataIterator(train, 1, patch_per_image=1, inv_values=False).get_dataset()
+    pix2pix = GANPIX2PIX()
+    generator: Model = pix2pix.get_generator_model()
+    discriminator: Model = pix2pix.get_discriminator_model()
 
-train_loop(100, train, validation_data, batch_size=256)
+    generator.compile()
+    discriminator.compile()
+
+    log_dir = "R:/"
+    date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    summary_writer = tf.summary.create_file_writer(
+        log_dir + "fit/" + date)
+
+    image_save_path = log_dir + "fit/" + date + '/images/'
+    model_save_path = log_dir + "fit/" + date + '/generators/'
+
+    Path(image_save_path).mkdir(parents=True, exist_ok=True)
+    Path(model_save_path).mkdir(parents=True, exist_ok=True)
+    print(image_save_path, model_save_path)
+
+    with open("config.json") as config_file:
+        config = json.load(config_file)['gan.training']
+
+    data_path = "./extra_data/Alizarine/folds.json"
+    train, _ = load_dataset(data_path, True)[0]
+    validation_data = DataIterator(
+        train, 1, patch_per_image=1, inv_values=False).get_dataset()
+
+    train_loop(100, train, generator, discriminator, generator_optimizer,
+               discriminator_optimizer, summary_writer, validation_data, batch_size=192)
