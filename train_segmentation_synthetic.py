@@ -33,8 +33,15 @@ if __name__ == "__main__":
     preprocesing = config["preprocesing"]
     hexagon_generator_params = config["hexagon_generator_params"]
 
+    train, test = load_dataset(
+        dataset_meta["path"], normalize=False, as_numpy=dataset_meta["as_numpy"]
+    )[dataset_meta["fold"]]
+    validation_data = DataIterator(
+        test, 1, patch_per_image=1, inv_values=False
+    ).get_dataset()
+
     synthetic_masks, synthetic_images = generate_dataset_from_generators(
-        generators, hexagon_generator_params
+        generators, hexagon_generator_params, train_dataset = train
     )
 
     dataset = images_preprocessing(
@@ -48,13 +55,6 @@ if __name__ == "__main__":
         log_range=preprocesing["log_range"],
         standardization=preprocesing["standardization"]
     )
-
-    _, test = load_dataset(
-        dataset_meta["path"], normalize=False, as_numpy=dataset_meta["as_numpy"]
-    )[dataset_meta["fold"]]
-    validation_data = DataIterator(
-        test, 1, patch_per_image=1, inv_values=False
-    ).get_dataset()
 
     unet = SegmentationUnet(
         log_path_save="segmentation/logs",

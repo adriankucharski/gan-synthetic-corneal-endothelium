@@ -10,6 +10,7 @@ from typing import Tuple, Union
 import numpy as np
 import tensorflow as tf
 from skimage import io
+from keras import Model, Sequential
 from tensorflow.keras.layers import (
     BatchNormalization,
     GaussianDropout,
@@ -22,7 +23,6 @@ from tensorflow.keras.layers import (
     MaxPool2D,
 )
 from tensorflow.keras.losses import BinaryCrossentropy
-from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
 from tqdm import tqdm
@@ -31,7 +31,6 @@ import tensorflow.keras.backend as K
 
 np.set_printoptions(suppress=True)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
 
 def dice_coef(y_true, y_pred):
     smooth = 1.0

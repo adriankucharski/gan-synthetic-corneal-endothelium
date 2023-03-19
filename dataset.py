@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from skimage import exposure, io, morphology, transform
-from tensorflow.keras.models import Model, load_model
+from keras.models import Model, load_model
 from skimage import filters
 from mosaic import generate_hexagons
 from util import (
@@ -20,6 +20,14 @@ from util import (
     nonzeros_object_to_centroids,
 )
 from typing import NamedTuple
+
+def remove_gaussian_dropout_from_model(model: Model) -> Model:
+    lay_1 = model.get_layer('conv2d_7')
+    lay_2 = model.get_layer('output')
+    x = lay_1(model.layers[-4].output)
+    x = lay_2(x)
+    new_model = Model(inputs=model.input, outputs=x)
+    return new_model
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -212,11 +220,11 @@ def load_dataset(
 
 
 def generate_dataset_from_generators(
-    generators_path: Tuple[str], params: GeneratorParams
+    generators_path: Tuple[str], params: GeneratorParams, model_gaussian_dropout: bool = True, train_dataset: List[np.ndarray] = None
 ) -> Tuple[np.ndarray, np.ndarray]:
     synthetic_image, synthetic_mask = None, None
     for generator_path in generators_path:
-        image, mask = generate_dataset(generator_path, **params)
+        image, mask = generate_dataset(generator_path, **params, model_gaussian_dropout=model_gaussian_dropout, train_dataset=train_dataset)
         if synthetic_mask is None and synthetic_image is None:
             synthetic_image = image
             synthetic_mask = mask
@@ -241,8 +249,12 @@ def generate_dataset(
     edges_thickness: int = 1,
     remove_edges_ratio: float = 0,
     rotation_range=(0, 0),
+    model_gaussian_dropout: bool = True,
+    train_dataset: List[np.ndarray] = None
 ) -> Tuple[np.ndarray, np.ndarray]:
     model_generator: Model = load_model(generator_path)
+    if model_gaussian_dropout == False:
+        model_generator = remove_gaussian_dropout_from_model(model_generator)
     hex_it = HexagonDataIterator(
         batch_size=batch_size,
         patch_size=patch_size,
@@ -401,6 +413,7 @@ class DataIterator(tf.keras.utils.Sequence):
         normalize=False,
         inv_values=True,
         rot90=False,
+        dtype=np.float32
     ):
         """
         Initialization
@@ -415,6 +428,7 @@ class DataIterator(tf.keras.utils.Sequence):
         self.normalize = normalize
         self.inv_values = inv_values
         self.rot90 = rot90
+        self.dtype = dtype
         self.on_epoch_end()
 
     def __len__(self) -> int:
@@ -442,7 +456,7 @@ class DataIterator(tf.keras.utils.Sequence):
         self.image, self.mask = [], []
         mid = self.patch_size // 2
         for x, y, roi, markers in self.dataset:
-            x, y = x.astype(np.float32), y.astype(np.float32)
+            x, y = x.astype(self.dtype), y.astype(self.dtype)
             ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
             xrand = np.random.randint(xmin + mid, xmax - mid, self.patch_per_image)
             yrand = np.random.randint(ymin + mid, ymax - mid, self.patch_per_image)

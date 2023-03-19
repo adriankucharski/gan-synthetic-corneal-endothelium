@@ -159,7 +159,7 @@ def discriminator_loss(disc_real_output, disc_generated_output):
     return total_disc_loss
 
 
-@tf.function
+# @tf.function(jit_compile=True)
 def train_step(input_image, target, step, generator, discriminator, generator_optimizer, discriminator_optimizer, summary_writer):
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         gen_output = generator(input_image, training=True)
@@ -266,4 +266,4 @@ if __name__ == '__main__':
         train, 1, patch_per_image=1, inv_values=False).get_dataset()
 
     train_loop(100, train, generator, discriminator, generator_optimizer,
-               discriminator_optimizer, summary_writer, validation_data, batch_size=192)
+               discriminator_optimizer, summary_writer, validation_data, batch_size=256)
