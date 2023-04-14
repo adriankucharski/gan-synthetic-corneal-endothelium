@@ -17,3 +17,6 @@ create_animation.py
 /segmented_images/
 /draw_io_images/
 temp1.py
+train_segmentation_synthetic_pix2pix.py
+/ablation
+ablation.py

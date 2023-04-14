@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 import json
 import os
 from dataset import DataIterator, load_dataset
-
+import pytorch_fid
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 loss_object = tf.keras.losses.BinaryCrossentropy(from_logits=True)
@@ -208,15 +208,15 @@ def train_loop(
             dataset,
             inv_values=False,
             rot90=dataset_rot90,
-            batch_size=batch_size
+            batch_size=batch_size,
+            patch_per_image=512
         )
 
         for _step, (x, y) in tqdm(enumerate(data_it), total=len(data_it)):
             train_step(x, y, _step * epoch, generator, discriminator,
                        generator_optimizer, discriminator_optimizer, summary_writer)
 
-        if epoch > 20:
-            generator.save(model_save_path + f'gan_{epoch}.hdf5')
+        generator.save(model_save_path + f'gan_{epoch}.hdf5')
 
         if evaluate_data is not None:
             xdata, ydata = evaluate_data
@@ -235,35 +235,35 @@ def train_loop(
 
 
 if __name__ == '__main__':
-    generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
-    discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+    for fold_id in [2]:
+        for dataset_name in ["Rotterdam_1000"]:
+            data_path = f"./datasets/{dataset_name}/folds.json"
+            
+            generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+            discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
-    pix2pix = GANPIX2PIX()
-    generator: Model = pix2pix.get_generator_model()
-    discriminator: Model = pix2pix.get_discriminator_model()
+            pix2pix = GANPIX2PIX()
+            generator: Model = pix2pix.get_generator_model()
+            discriminator: Model = pix2pix.get_discriminator_model()
 
-    generator.compile()
-    discriminator.compile()
+            generator.compile()
+            discriminator.compile()
 
-    log_dir = "R:/"
-    date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    summary_writer = tf.summary.create_file_writer(
-        log_dir + "fit/" + date)
+            log_dir = f"F:/TF_LOGS/{dataset_name}/"
+            date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            summary_writer = tf.summary.create_file_writer(
+                log_dir + "fit/" + date)
 
-    image_save_path = log_dir + "fit/" + date + '/images/'
-    model_save_path = log_dir + "fit/" + date + '/generators/'
+            image_save_path = log_dir + "fit/" + date + '/images/'
+            model_save_path = log_dir + "fit/" + date + '/generators/'
 
-    Path(image_save_path).mkdir(parents=True, exist_ok=True)
-    Path(model_save_path).mkdir(parents=True, exist_ok=True)
-    print(image_save_path, model_save_path)
+            Path(image_save_path).mkdir(parents=True, exist_ok=True)
+            Path(model_save_path).mkdir(parents=True, exist_ok=True)
+            print(image_save_path, model_save_path)
 
-    with open("config.json") as config_file:
-        config = json.load(config_file)['gan.training']
+            train, _ = load_dataset(data_path, True, as_numpy=False)[fold_id]
+            validation_data = DataIterator(
+                train, 1, patch_per_image=1, inv_values=False).get_dataset()
 
-    data_path = "./extra_data/Alizarine/folds.json"
-    train, _ = load_dataset(data_path, True)[0]
-    validation_data = DataIterator(
-        train, 1, patch_per_image=1, inv_values=False).get_dataset()
-
-    train_loop(100, train, generator, discriminator, generator_optimizer,
-               discriminator_optimizer, summary_writer, validation_data, batch_size=256)
+            train_loop(100, train, generator, discriminator, generator_optimizer,
+                    discriminator_optimizer, summary_writer, validation_data, batch_size=256)

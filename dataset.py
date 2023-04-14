@@ -21,6 +21,7 @@ from util import (
 )
 from typing import NamedTuple
 
+
 def remove_gaussian_dropout_from_model(model: Model) -> Model:
     lay_1 = model.get_layer('conv2d_7')
     lay_2 = model.get_layer('output')
@@ -28,6 +29,7 @@ def remove_gaussian_dropout_from_model(model: Model) -> Model:
     x = lay_2(x)
     new_model = Model(inputs=model.input, outputs=x)
     return new_model
+
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -132,9 +134,11 @@ def load_dataset(
     with open(json_path, "r") as f:
         folds_json = json.load(f)
         gt_path = os.path.join(folds_json["dataset_path"], folds_json["gt"])
-        images_path = os.path.join(folds_json["dataset_path"], folds_json["images"])
+        images_path = os.path.join(
+            folds_json["dataset_path"], folds_json["images"])
         roi_path = os.path.join(folds_json["dataset_path"], folds_json["roi"])
-        markers_path = os.path.join(folds_json["dataset_path"], folds_json["markers"])
+        markers_path = os.path.join(
+            folds_json["dataset_path"], folds_json["markers"])
 
         def load_images(path: str, w: int = None, h: int = None) -> np.ndarray:
             image = None
@@ -175,7 +179,8 @@ def load_dataset(
                 image = transform.resize(image[0], (h, w))[np.newaxis]
                 roi = transform.resize(roi[0], (h, w))[np.newaxis]
 
-                gt = transform.resize(gt[0, ..., 0], (h, w), anti_aliasing=True)
+                gt = transform.resize(
+                    gt[0, ..., 0], (h, w), anti_aliasing=True)
                 gt = morphology.skeletonize(gt > 0).astype("float")[
                     np.newaxis, ..., np.newaxis
                 ]
@@ -224,7 +229,8 @@ def generate_dataset_from_generators(
 ) -> Tuple[np.ndarray, np.ndarray]:
     synthetic_image, synthetic_mask = None, None
     for generator_path in generators_path:
-        image, mask = generate_dataset(generator_path, **params, model_gaussian_dropout=model_gaussian_dropout, train_dataset=train_dataset)
+        image, mask = generate_dataset(
+            generator_path, **params, model_gaussian_dropout=model_gaussian_dropout, train_dataset=train_dataset)
         if synthetic_mask is None and synthetic_image is None:
             synthetic_image = image
             synthetic_mask = mask
@@ -255,17 +261,36 @@ def generate_dataset(
     model_generator: Model = load_model(generator_path)
     if model_gaussian_dropout == False:
         model_generator = remove_gaussian_dropout_from_model(model_generator)
-    hex_it = HexagonDataIterator(
-        batch_size=batch_size,
-        patch_size=patch_size,
-        noise_size=noise_size,
-        inv_values=inv_values,
-        total_patches=num_of_data,
-        hexagon_height=hexagon_height,
-        neatness_range=neatness_range,
-        remove_edges_ratio=remove_edges_ratio,
-        rotation_range=rotation_range,
-    )
+
+    if train_dataset is None:
+        hex_it = HexagonDataIterator(
+            batch_size=batch_size,
+            patch_size=patch_size,
+            noise_size=noise_size,
+            inv_values=inv_values,
+            total_patches=num_of_data,
+            hexagon_height=hexagon_height,
+            neatness_range=neatness_range,
+            remove_edges_ratio=remove_edges_ratio,
+            rotation_range=rotation_range,
+        )
+    else:
+        data_it = DataIterator(train_dataset, 
+                               batch_size=batch_size,
+                               patch_size=patch_size, 
+                               inv_values=inv_values,
+                               patch_per_image=num_of_data//len(train_dataset))
+        real_masks = data_it.get_dataset()[0]
+        noise = np.random.normal(size=real_masks.shape)
+
+        data_1, data_2 = [], []
+        for index in range(0, len(real_masks) - batch_size + 1, batch_size):
+            idx = np.s_[index:index + batch_size]
+            data_1.append(real_masks[idx]), data_2.append(noise[idx])
+
+        data_1, data_2 = np.array(data_1), np.array(data_2)
+        print(data_1.shape, data_2.shape)
+        hex_it = zip(data_1, data_2)
 
     masks, images = [], []
     for h, z in hex_it:
@@ -275,10 +300,14 @@ def generate_dataset(
             for i in range(len(salty_h)):
                 ratio = np.random.uniform(*sap_ratio)
                 value = np.random.uniform(*sap_value_range)
-                keepe = np.random.choice([True, False], p=[keep_edges, 1 - keep_edges])
-                salty_h[i] = add_salt_and_pepper(salty_h[i], ratio, value, keepe)
-
-        p = model_generator.predict_on_batch([salty_h, z])
+                keepe = np.random.choice(
+                    [True, False], p=[keep_edges, 1 - keep_edges])
+                salty_h[i] = add_salt_and_pepper(
+                    salty_h[i], ratio, value, keepe)
+        if len(model_generator.input_shape) == 2:
+            p = model_generator.predict_on_batch([salty_h, z])
+        else:
+            p = model_generator.predict_on_batch(salty_h)
         if edges_thickness > 1:
             for i in range(len(h)):
                 func = morphology.erosion if inv_values else morphology.dilation
@@ -376,7 +405,7 @@ class HexagonDataIterator(tf.keras.utils.Sequence):
     def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
         "Generate one batch of data"
         # Generate indexes of the batch
-        idx = np.s_[index * self.batch_size : (index + 1) * self.batch_size]
+        idx = np.s_[index * self.batch_size: (index + 1) * self.batch_size]
         h = self.h[idx]
         z = self.z[idx]
         return h, z
@@ -438,7 +467,7 @@ class DataIterator(tf.keras.utils.Sequence):
     def __getitem__(self, index: int) -> Tuple[np.ndarray, np.ndarray]:
         "Generate one batch of data and returns y, x (mask, image)"
         # Generate indexes of the batch
-        idx = np.s_[index * self.batch_size : (index + 1) * self.batch_size]
+        idx = np.s_[index * self.batch_size: (index + 1) * self.batch_size]
         x = self.image[idx]
         y = self.mask[idx]
         return y, x  # mask, image
@@ -458,12 +487,14 @@ class DataIterator(tf.keras.utils.Sequence):
         for x, y, roi, markers in self.dataset:
             x, y = x.astype(self.dtype), y.astype(self.dtype)
             ymin, xmin, ymax, xmax = self._get_constrain_roi(roi)
-            xrand = np.random.randint(xmin + mid, xmax - mid, self.patch_per_image)
-            yrand = np.random.randint(ymin + mid, ymax - mid, self.patch_per_image)
+            xrand = np.random.randint(
+                xmin + mid, xmax - mid, self.patch_per_image)
+            yrand = np.random.randint(
+                ymin + mid, ymax - mid, self.patch_per_image)
 
             for xpos, ypos in zip(xrand, yrand):
-                px = x[ypos - mid : ypos + mid, xpos - mid : xpos + mid]
-                py = y[ypos - mid : ypos + mid, xpos - mid : xpos + mid]
+                px = x[ypos - mid: ypos + mid, xpos - mid: xpos + mid]
+                py = y[ypos - mid: ypos + mid, xpos - mid: xpos + mid]
                 if self.rot90:
                     k = np.random.randint(0, 3)
                     px, py = np.rot90(px, k), np.rot90(py, k)
@@ -489,8 +520,10 @@ def crop_patch(
         w, h, _ = im.shape
     else:
         w, h = im.shape
-    im = im[border : w - border, border : h - border]
-    mask = mask[border : w - border, border : h - border]
-    im = cv2.resize(im, (w, h), interpolation=cv2.INTER_NEAREST)[..., np.newaxis]
-    mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)[..., np.newaxis]
+    im = im[border: w - border, border: h - border]
+    mask = mask[border: w - border, border: h - border]
+    im = cv2.resize(
+        im, (w, h), interpolation=cv2.INTER_NEAREST)[..., np.newaxis]
+    mask = cv2.resize(
+        mask, (w, h), interpolation=cv2.INTER_NEAREST)[..., np.newaxis]
     return (im, mask)

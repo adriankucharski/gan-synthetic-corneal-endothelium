@@ -29,8 +29,7 @@ from skimage.segmentation import flood_fill
 
 
 def dumb_params(params: dict, spath: str = "segmentation/params"):
-    time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
-    sargpath = os.path.join(spath, f"{time}.json")
+    sargpath = os.path.join(spath, "config.json")
     Path(spath).mkdir(parents=True, exist_ok=True)
     with open(sargpath, "w") as file:
         file.write(json.dumps(params))
@@ -132,6 +131,13 @@ def remove_small(im: np.ndarray) -> np.ndarray:
     im = labeled == max_idx
     return im
 
+def prepare_gt(gt, roi):
+    if len(gt.shape) == 3:
+        gt, roi = gt[..., 0], roi[..., 0]
+    gt = gt * roi + (morphology.dilation(roi) - roi)
+    gt = morphology.closing(gt, np.ones((7,7)))
+    gt = morphology.thin(gt)
+    return gt.astype(float)
 
 def postprocess_sauvola(
     im: np.ndarray, roi: np.ndarray, size=5, dilation_square_size=0, pruning_op=False

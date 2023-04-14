@@ -96,6 +96,15 @@ def cell_neighbours_stats(
     neighbours = metrics.mean_absolute_error(neighbours_true, neighbours_pred)
     return neighbours, hexagonality
 
+def prepare_gt(gt, roi):
+    if len(gt.shape) == 3:
+        gt = gt[..., 0]
+    if len(roi.shape) == 3:
+        roi = roi[..., 0] 
+    gt = gt * roi + (morphology.dilation(roi) - roi)
+    gt = morphology.closing(gt, np.ones((7,7)))
+    gt = morphology.thin(gt)
+    return gt.astype(float)
 
 def calculate(
     i: int,
@@ -107,18 +116,26 @@ def calculate(
 ):
     p = postprocess_sauvola(predicted[i], rois[i], size=window_size, pruning_op=True)
 
+    # gt = prepare_gt(gts[i], rois[i])
+    gt = gts[i][..., 0]
     p_dilated = morphology.dilation(p[..., 0], morphology.square(3))
-    gt_dilated = morphology.dilation(gts[i][..., 0], morphology.square(3))
+    gt_dilated = morphology.dilation(gt, morphology.square(3))
 
-    mhd = MHD(gts[i], p)
+    mhd = MHD(gt[..., np.newaxis], p)
     dc = dice(p_dilated, gt_dilated)
-    pearsonr = pearsonr_image(gts[i], p, rois[i], markers[i])
-    neighbours, hexagonality = cell_neighbours_stats(p, gts[i], rois[i], markers[i])
+    pearsonr = pearsonr_image(gt[..., np.newaxis], p, rois[i], markers[i])
+    neighbours, hexagonality = cell_neighbours_stats(p, gt[..., np.newaxis], rois[i], markers[i])
     
     return dc, mhd, pearsonr, neighbours, hexagonality
 
 
 if __name__ == "__main__":
+    """
+    Example:
+    python evaluate.py Alizarine 0 segmentation/models/synthetic_pix2pix/20230329-2116 7
+    python evaluate.py Gavet 0 segmentation/models/synthetic_pix2pix/20230329-2116 7
+    python evaluate.py Rotterdam_1000 0 segmentation/models/synthetic_pix2pix/20230329-2116 7
+    """
     datasets_names = ["Alizarine", "Gavet", "Hard", "Rotterdam", "Rotterdam_1000"]
 
     args = sys.argv[1:]

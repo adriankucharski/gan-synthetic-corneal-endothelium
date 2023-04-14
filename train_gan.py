@@ -23,7 +23,6 @@ if __name__ == '__main__':
 
     gan = GAN(patch_per_image=config['patch_per_image'],
               gan_lr=config['gan_lr'], d_lr=config['d_lr'], g_lr=config['g_lr'])
-    
-    dumb_params(config, 'generator/hexagon_params') # save as logs
+    dumb_params(config, gan.main_log_path) # save as logs
     
     gan.train(int(config['epochs']), train, evaluate_data=validation_data, save_per_epochs=1)

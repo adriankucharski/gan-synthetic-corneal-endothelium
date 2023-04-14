@@ -6,12 +6,12 @@ import datetime
 import os
 from pathlib import Path
 from typing import Tuple, Union
-
+import inspect
 import numpy as np
 import tensorflow as tf
 from skimage import io
 from keras import Model, Sequential
-from tensorflow.keras.layers import (
+from keras.layers import (
     BatchNormalization,
     GaussianDropout,
     Concatenate,
@@ -20,24 +20,30 @@ from tensorflow.keras.layers import (
     Dropout,
     Input,
     LeakyReLU,
-    MaxPool2D,
+    MaxPooling2D,
+    Conv2DTranspose,
+    Dense,
+    Flatten,
+    Activation
 )
-from tensorflow.keras.losses import BinaryCrossentropy
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
+from keras.losses import BinaryCrossentropy
+from keras.optimizers import Adam, RMSprop
+from keras.callbacks import TensorBoard, LambdaCallback, ModelCheckpoint
 from tqdm import tqdm
 from dataset import DataIterator
-import tensorflow.keras.backend as K
+import keras.backend as K
 
 np.set_printoptions(suppress=True)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 
 def dice_coef(y_true, y_pred):
     smooth = 1.0
     y_true_f = K.flatten(y_true)
     y_pred_f = K.flatten(y_pred)
     intersection = K.sum(y_true_f * y_pred_f)
-    score = (2.0 * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+    score = (2.0 * intersection + smooth) / \
+        (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
     return score
 
 
@@ -49,30 +55,32 @@ def dice_loss(y_true, y_pred):
 class GAN:
     def __init__(
         self,
-        g_path_save="generator/models",
-        d_path_save="discriminator/models",
-        evaluate_path_save="data/images/",
-        log_path="logs/gan/",
         patch_size=64,
-        patch_per_image=768,
-        g_path_last_name_save="model_last.h5",
-        d_path_last_name_save="model_last.h5",
-        g_lr=1e-5,
-        d_lr=2e-4,
-        gan_lr=2e-4,
+        patch_per_image=512,
+        g_lr=1e-6,
+        d_lr=1e-5,
+        gan_lr=1e-5,
+        main_log_path: str = "logs",
+        g_path_save: str = "generators",
+        d_path_save: str = "discriminators",
+        evaluate_path_save: str = "images",
+        log_path: str = "tf_logs",
+        model_code_save: str = 'code',
+        save_with_optimizer: bool = False
     ):
+        timer = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+        self.main_log_path = os.path.join(main_log_path, timer)
         self.log_path = log_path
         self.g_path_save = g_path_save
         self.d_path_save = d_path_save
         self.evaluate_path_save = evaluate_path_save
         self.patch_size = patch_size
         self.patch_per_image = patch_per_image
-        self.g_path_last_name_save = g_path_last_name_save
-        self.d_path_last_name_save = d_path_last_name_save
+        self.model_code_save = model_code_save
+        self.save_with_optimizer = save_with_optimizer
 
         self.noise_size = (patch_size, patch_size, 1)
         self.input_size = (patch_size, patch_size, 1)
-        self.input_disc_size = (patch_size, patch_size, 1)
 
         self.g_model = self._generator_model()
         self.g_model.compile(
@@ -96,10 +104,20 @@ class GAN:
             loss="binary_crossentropy",
         )
         self._create_dirs()
-        self.writer = tf.summary.create_file_writer(self.log_path)
+        self.writer = tf.summary.create_file_writer(
+            os.path.join(self.main_log_path, self.log_path))
         self.gan_log_names = ["gan_loss"]
         self.d_log_names = ["d_loss", "d_acc"]
         self.g_log_names = ["g_loss"]
+        self._log_code()
+
+    def _log_code(self):
+        g = inspect.getsource(self._generator_model)
+        d = inspect.getsource(self._discriminator_model)
+        with open(os.path.join(self.model_code_save, 'gan.txt'), 'w') as file:
+            file.write(g)
+            file.write('\n')
+            file.write(d)
 
     def _evaluate(
         self, epoch: int, data: Tuple[np.ndarray, np.ndarray] = None
@@ -117,7 +135,8 @@ class GAN:
                 x, y = xdata[i], ydata[i]
                 impath = os.path.join(path, f"org_{i}.png")
                 image = np.array(
-                    np.concatenate([x, pred[i], (y + 1) / 2.0], axis=1) * 255, "uint8"
+                    np.concatenate([x, pred[i], (y + 1) / 2.0],
+                                   axis=1) * 255, "uint8"
                 )
                 io.imsave(impath, image)
                 images.append(image)
@@ -134,10 +153,10 @@ class GAN:
     def _save_models(self, g_path: str = None, d_path: str = None):
         if g_path and self.g_path_save:
             path = os.path.join(self.g_path_save, g_path)
-            self.g_model.save(path)
+            self.g_model.save(path, include_optimizer=self.save_with_optimizer)
         if d_path and self.d_path_save:
             path = os.path.join(self.d_path_save, d_path)
-            self.d_model.save(path)
+            self.d_model.save(path, include_optimizer=self.save_with_optimizer)
 
     def _write_log(self, names, metrics):
         with self.writer.as_default():
@@ -157,20 +176,27 @@ class GAN:
         self.writer.flush()
 
     def _create_dirs(self):
-        time = datetime.datetime.now().strftime("%Y%m%d-%H%M")
         if self.log_path:
-            self.log_path = os.path.join(self.log_path, time)
+            self.log_path = os.path.join(self.main_log_path, self.log_path)
         if self.g_path_save:
-            self.g_path_save = os.path.join(self.g_path_save, time)
+            self.g_path_save = os.path.join(
+                self.main_log_path, self.g_path_save)
         if self.d_path_save:
-            self.d_path_save = os.path.join(self.d_path_save, time)
+            self.d_path_save = os.path.join(
+                self.main_log_path, self.d_path_save)
         if self.evaluate_path_save:
-            self.evaluate_path_save = os.path.join(self.evaluate_path_save, time)
+            self.evaluate_path_save = os.path.join(
+                self.main_log_path, self.evaluate_path_save)
+        if self.model_code_save:
+            self.model_code_save = os.path.join(
+                self.main_log_path, self.model_code_save)
+
         for path in [
             self.log_path,
             self.g_path_save,
             self.d_path_save,
             self.evaluate_path_save,
+            self.model_code_save,
         ]:
             if path:
                 Path(path).mkdir(parents=True, exist_ok=True)
@@ -183,22 +209,20 @@ class GAN:
         return Model(inputs=[H, Z], outputs=discriminator_out, name="GAN")
 
     def _discriminator_model(self):
-        h = Input(self.input_disc_size, name="mask")
-        t = Input(self.input_disc_size, name="image")
+        h = Input(self.input_size, name="mask")
+        t = Input(self.input_size, name="image")
 
         inputs = Concatenate()([h, t])
         x = Conv2D(64, 5, padding="same")(inputs)
         x = LeakyReLU(0.3)(x)
-        x = MaxPool2D((2, 2))(x)
 
+        x = MaxPooling2D((2, 2))(x)
         x = Dropout(0.25)(x)
-
         x = Conv2D(128, 3, padding="valid")(x)
         x = LeakyReLU(0.3)(BatchNormalization()(x))
-        x = MaxPool2D((2, 2))(x)
 
+        x = MaxPooling2D((2, 2))(x)
         x = Dropout(0.25)(x)
-
         x = Conv2D(256, 3, padding="valid")(x)
         x = LeakyReLU(0.3)(BatchNormalization()(x))
 
@@ -212,11 +236,11 @@ class GAN:
 
         encoder = []
         kernels = 3
-        filters, fn, fm = [16, 32, 64], 64, 16
+        filters, fn, fm = np.array([16, 32, 64]), 64, 16
         for f in filters:
             x = Conv2D(f, kernels, padding="same", activation="relu")(x)
             encoder.append(x)
-            x = MaxPool2D((2, 2))(x)
+            x = MaxPooling2D((2, 2))(x)
 
         x = Conv2D(fn, kernels, padding="same", activation="relu")(x)
 
@@ -227,7 +251,8 @@ class GAN:
 
         x = GaussianDropout(0.15)(x, training=True)
         x = Conv2D(fm, kernels, padding="same", activation="relu")(x)
-        outputs = Conv2D(1, 3, padding="same", activation="tanh", name="output")(x)
+        outputs = Conv2D(1, 3, padding="same",
+                         activation="tanh", name="output")(x)
         return Model(inputs=[H, Z], outputs=outputs, name="generator")
 
     def train(
@@ -290,7 +315,6 @@ class GAN:
                     self._write_log(self.g_log_names, [metrics_g])
                     self._write_log(self.d_log_names, metrics_d)
 
-            self._save_models(self.g_path_last_name_save, self.d_path_last_name_save)
             if (epoch + 1) % save_per_epochs == 0:
                 images = self._evaluate(epoch=epoch, data=evaluate_data)
                 self._write_images(epoch, images)
@@ -343,7 +367,8 @@ class SegmentationUnet:
         self.tensorboard_log_callback = TensorBoard(
             log_dir=self.log_path, write_images=True
         )
-        self.tensorboard_image_callback = LambdaCallback(on_epoch_end=self._evaluate)
+        self.tensorboard_image_callback = LambdaCallback(
+            on_epoch_end=self._evaluate)
 
     def _evaluate(self, epoch: int, logs):
         if self.evaluate_data is not None:
@@ -392,7 +417,7 @@ class SegmentationUnet:
         for f in filters:
             x = ConvUNetBlock(f, act="relu", dropout=0.20)(x)
             encoder.append(x)
-            x = MaxPool2D((2, 2))(x)
+            x = MaxPooling2D((2, 2))(x)
 
         x = ConvUNetBlock(fn, act="relu", dropout=0.20)(x)
 
@@ -402,7 +427,8 @@ class SegmentationUnet:
             x = Concatenate()([encoder.pop(), x])
 
         x = ConvUNetBlock(fm, act="relu", dropout=0.20)(x)
-        outputs = Conv2D(1, 3, padding="same", activation="sigmoid", name="output")(x)
+        outputs = Conv2D(1, 3, padding="same",
+                         activation="sigmoid", name="output")(x)
         return Model(inputs=X, outputs=outputs, name="unet")
 
     def train(
@@ -431,4 +457,3 @@ class SegmentationUnet:
 
     def summary(self):
         self.model.summary()
-

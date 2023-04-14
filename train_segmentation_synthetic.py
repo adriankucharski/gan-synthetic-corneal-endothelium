@@ -6,6 +6,7 @@ Train Segmentation Unet with synthetic data
 import json
 import os
 from typing import Tuple
+from matplotlib import pyplot as plt
 
 import numpy as np
 from dataset import (
@@ -41,8 +42,12 @@ if __name__ == "__main__":
     ).get_dataset()
 
     synthetic_masks, synthetic_images = generate_dataset_from_generators(
-        generators, hexagon_generator_params, train_dataset = train
+        generators, hexagon_generator_params, model_gaussian_dropout=True
     )
+
+    if True:
+        plt.imshow(np.hstack([synthetic_images[0], synthetic_masks[0]]), 'gray')
+        plt.show()
 
     dataset = images_preprocessing(
         synthetic_images,
