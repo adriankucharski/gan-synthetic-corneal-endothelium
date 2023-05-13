@@ -29,6 +29,8 @@ Significance.
 Due to the simple graphical user interface wrapping the proposed solution, many users can easily obtain unlimited training data for corneal endothelial image segmentation and use it in various scenarios.}
 }</code></pre>
 
+## About this repository
+
 Mosaic Generator (`hexgrid.py/grid_create_hexagons`) is based on https://github.com/MichaelMure/gimp-plugins/blob/master/common/mosaic.c
 
 Patch-Based-UNet prediction is based on https://github.com/afabijanska/CornealEndothelium
